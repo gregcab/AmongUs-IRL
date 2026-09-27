@@ -1,0 +1,80 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function b64(text: string): string {
+  return Buffer.from(text, "utf8").toString("base64url");
+}
+
+function unb64(text: string): string | null {
+  try {
+    return Buffer.from(text, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+export function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
+
+/** HMAC-SHA256 signed tokens encoded in QR codes, plus the stateless admin session token. */
+export class Tokens {
+  constructor(private readonly secret: string) {}
+
+  private sign(payload: string): string {
+    return createHmac("sha256", this.secret).update(payload).digest("base64url");
+  }
+
+  private seal(payload: string): string {
+    return `${b64(payload)}.${this.sign(payload)}`;
+  }
+
+  /** Returns the payload if the signature is valid. */
+  private open(token: unknown): string | null {
+    if (typeof token !== "string" || token.length > 512) return null;
+    const dot = token.indexOf(".");
+    if (dot <= 0) return null;
+    const payload = unb64(token.slice(0, dot));
+    if (payload === null) return null;
+    return safeEqual(token.slice(dot + 1), this.sign(payload)) ? payload : null;
+  }
+
+  static bodySlot(now: number, rotationSeconds: number): number {
+    return Math.floor(now / (rotationSeconds * 1000));
+  }
+
+  bodyToken(gameId: string, playerId: string, slot: number): string {
+    return this.seal(`B|${gameId}|${playerId}|${slot}`);
+  }
+
+  /** Accepts the current rotation slot and the previous one. */
+  verifyBody(token: unknown, now: number, rotationSeconds: number): { gameId: string; playerId: string } | null {
+    const payload = this.open(token);
+    const parts = payload?.split("|");
+    if (!parts || parts.length !== 4 || parts[0] !== "B") return null;
+    const slot = Number(parts[3]);
+    const current = Tokens.bodySlot(now, rotationSeconds);
+    if (!Number.isInteger(slot) || (slot !== current && slot !== current - 1)) return null;
+    return { gameId: parts[1]!, playerId: parts[2]! };
+  }
+
+  stationToken(gameId: string): string {
+    return this.seal(`E|${gameId}`);
+  }
+
+  verifyStation(token: unknown): { gameId: string } | null {
+    const parts = this.open(token)?.split("|");
+    if (!parts || parts.length !== 2 || parts[0] !== "E") return null;
+    return { gameId: parts[1]! };
+  }
+
+  /** Stateless admin session: survives restarts, invalidated by a PIN change. */
+  adminToken(pin: string): string {
+    return this.sign(`A|${pin}`);
+  }
+
+  verifyAdmin(token: unknown, pin: string): boolean {
+    return typeof token === "string" && safeEqual(token, this.adminToken(pin));
+  }
+}
