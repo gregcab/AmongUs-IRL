@@ -71,6 +71,8 @@ export interface GameState {
   kills: KillEvent[];
   timeline: TimelineEntry[];
   killCooldownEndsAt?: number;
+  /** True once `kill:ready` has been sent for the current cooldown. */
+  killReadyNotified?: boolean;
   emergencyCooldownEndsAt?: number;
   phaseEndsAt?: number;
   startedAt?: number;
