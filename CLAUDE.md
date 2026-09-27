@@ -2,97 +2,68 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project state
+## Project
 
-This repository currently contains only [SPEC.md](SPEC.md) — no code has been written yet. SPEC.md is the full implementation spec (in French) for the MVP and is the source of truth for architecture, event contracts, and data model. Read it before implementing anything; the summary below is a navigation aid, not a replacement.
+"Among Us IRL": a local web app (mini-PC or Raspberry Pi 5) that referees a real-life, phone-based game of Among Us. Local Wi-Fi only, plain HTTP (no TLS). [SPEC.md](SPEC.md) (in French) is the source of truth for rules, event contracts and data model — read the relevant section before changing game behavior.
 
-**Language convention**: code, identifiers, and event names are in English. Text shown to players (UI strings) is in French.
+Three views, one React app: player (`/`, phone portrait), TV (`/tv`, no interaction), game-master console (`/admin`, PIN-protected; the GM sees all roles and does not play). QR scan landing pages: `/r/:token` (body report), `/e/:token` (emergency station); `/s/:token` is reserved for future tasks.
 
-## What this is
+**Language convention**: code, identifiers and event names in English; every player-facing string in French.
 
-"Among Us IRL": a local web app (Docker, mini-PC or Raspberry Pi 5) that referees a real-life, phone-based game of Among Us. No internet access — local Wi-Fi only, plain HTTP (no TLS). Three views:
+## Commands
 
-- **Player** (`/`) — phone, portrait.
-- **TV** (`/tv`) — shared screen, landscape, no interaction.
-- **Admin/game-master console** (`/admin`) — PIN-protected, sees all roles, arbitrates but does not play.
+Requires Node ≥ 22 and pnpm (enable with `corepack enable pnpm`).
 
-## Planned architecture (per SPEC.md §4)
-
-pnpm workspaces monorepo, TypeScript strict, Node 22:
-
-```
-packages/shared/src/   types.ts, params.ts, events.ts   — shared types & event contracts
-apps/server/src/
-  engine/              pure deterministic game engine (see below)
-  scheduler.ts         timers → "tick" commands into the engine
-  transport/           Socket.IO, REST routes, rooms
-  auth.ts              player sessions, admin PIN
-  tokens.ts            HMAC-signed rotating QR tokens
-  persistence.ts       SQLite: event journal + snapshot
-  index.ts
-apps/web/src/           Vite + React, single app, three routes (player/tv/admin)
+```bash
+pnpm install
+pnpm dev             # server (tsx watch, :8080) + Vite (:5173, proxies /api and /socket.io)
+pnpm build           # web → apps/web/dist, server → apps/server/dist (esbuild bundle)
+pnpm start           # production server; also serves apps/web/dist
+pnpm test            # all Vitest tests
+pnpm typecheck
+pnpm simulate --players 8               # bots play a full game (kill, QR report, vote) against a running server
+pnpm simulate --players 4 --passive     # bots join/arrive/vote "skip"; drive the game from /admin
 ```
 
-- **Server**: Fastify + Socket.IO, also serves the built frontend static assets.
-- **Persistence**: SQLite (`better-sqlite3`), file in a Docker volume. No Redis, no reverse proxy in the MVP — single process, single node.
-- **Tests**: Vitest.
+Single test file / test: `pnpm vitest run apps/server/test/engine.test.ts -t "restarts the team cooldown"`.
 
-### Core engine pattern (central to this codebase)
+Env vars: `PORT` (8080), `PUBLIC_URL` (URL encoded in every QR code; required in production, auto-detected LAN IP in dev — with `pnpm dev` set it to the Vite port, e.g. `http://192.168.1.10:5173`), `ADMIN_PIN` (required in production, `1234` in dev), `HMAC_SECRET` (generated into `DATA_DIR/hmac_secret` if absent), `DATA_DIR` (`./data` in dev), `TIME_SCALE` (dev-only duration multiplier, e.g. `0.2`). Add `?dev=1` to the player URL to keep sessions per tab (several players in one browser).
 
-Game state lives in memory in a single server process. The core is a **pure, deterministic reducer**, testable without network or real clocks:
+Docker is deliberately not used during MVP development; SPEC §4 Dockerfile/compose must be added back before deploying to the Pi (native `better-sqlite3` build for ARM).
 
-```ts
-reduce(state: GameState, command: Command, now: number, rng: Rng)
-  → { state: GameState; events: OutboundEvent[]; timers: TimerRequest[] }
-```
+## Architecture
 
-- `command` comes from a client (`player:*`, `admin:*`) or from the scheduler (`tick:*`).
-- `events` are addressed to a recipient: one player, a group (impostors/ghosts/alive), the TV, the admin, or everyone.
-- `timers` ask the scheduler to call the engine back at a deadline (e.g. `tick:deathEffective`, `tick:phaseEnd`, `tick:killReady`), each with an id so it can be cancelled/ignored if stale.
-- `rng` is injected — deterministic in tests, `crypto.randomInt` in production.
+pnpm monorepo: `packages/shared` (types, params + validation, event names/payloads, colors — imported as TS source, no build step), `apps/server` (Fastify + Socket.IO + better-sqlite3), `apps/web` (Vite + React, no router/CSS framework).
 
-Every accepted command is appended to the SQLite journal, and full state is snapshotted as JSON. On restart, the server reloads the last snapshot and reschedules timers from the deadlines stored in state. Any command received outside its valid phase must be rejected with a typed error and no side effects — this is load-bearing for the anti-cheat model.
+### Server data flow
 
-### Phase/status state machines (SPEC.md §5)
+Every state change goes through `GameRuntime.dispatch(command)` (`apps/server/src/game.ts`):
 
-```
-LOBBY → ROLE_REVEAL → PLAYING ⇄ MEETING → … → GAME_OVER → (LOBBY via "replay")
-MEETING = GATHERING → DISCUSSION → VOTING → RESULT
-```
+1. `reduce(state, command, now, rng)` in `src/engine/` — **pure and deterministic**, never mutates its input (it `structuredClone`s). Rejected or stale commands return the *same state object* plus an optional typed `error`; callers detect "no change" by identity.
+2. Accepted commands are journaled and the full state snapshotted in SQLite in one transaction (`persistence.ts`).
+3. Timers are **derived from state** (`engine/timers.ts: timersFromState`), not tracked separately: `Scheduler.sync` holds exactly that set (keyed by id, rescheduled when the deadline or command changes). Tick commands carry a key/deadline and are ignored when stale. This is why restart recovery is just "load snapshot + sync timers".
+4. `Transport.onResult` (`transport/socket.ts`) recomputes group rooms, routes engine events, then sends each socket a per-client filtered `state:sync` view **only if its JSON changed** — so a crewmate receives nothing when someone secretly dies.
 
-Player status: `ALIVE → DYING → BODY → GHOST` (or `ALIVE → GHOST` on ejection). `DYING` still counts as alive for win conditions and for other players; only `BODY`/`GHOST` count as dead.
+Things outside the engine because they need secrets or wall-clock: HMAC tokens (`tokens.ts`), rotating body QR pushes (1 s interval in `Transport`), admin PIN rate limiting (`auth.ts`). QR scans arrive via REST (`transport/rest.ts`), which verifies the token and then dispatches `player:reportBody` / `player:emergency`.
 
-### Realtime contract (SPEC.md §8)
+### Information-hiding rules (anti-cheat)
 
-Socket.IO rooms: `player:<id>`, `alive`, `impostors`, `ghosts`, `tv`, `admin`, recomputed on every status change. **Role information only ever flows through `player:<id>`, `impostors`, and `admin`** — the TV is never authenticated as a player and never receives role info before `GAME_OVER`. `state:sync` is the client-side source of truth: every view must be able to fully reconstruct itself from it, on any (re)connection.
+- `engine/views.ts` decides what each client may know; `publicPlayers.dead` is true only for `GHOST` (unreported bodies stay hidden until a meeting). Roles reach only their owner, fellow impostors, the admin, the ejected player's role if `confirmEjects`, and everyone at `GAME_OVER`. Tests in `engine.test.ts` ("never leaks roles…") guard this.
+- Shared actions must behave identically for crew and impostors (an impostor may declare their own death; refusing would reveal the role). The player screen is identical for both roles; the only difference is the tiny status dot when an impostor's kill is ready.
+- No sound on the victim's phone at kill time or on impostors' phones at `kill:ready`.
 
-## Security model (SPEC.md §11)
+### State machines (SPEC §5)
 
-Server is authoritative — clients are trusted only for stated intent, never for state. QR tokens are HMAC-SHA256 signed, checked in constant time. Response timing/behavior must be identical for crew and impostors on all shared actions (no side-channel role leaks). No sound on the victim's phone at kill time, nor on the impostor's phone at `kill:ready`.
+`LOBBY → ROLE_REVEAL → PLAYING ⇄ MEETING(GATHERING → DISCUSSION → VOTING → RESULT) → GAME_OVER → LOBBY`. Player status `ALIVE → DYING → BODY → GHOST` (or `ALIVE → GHOST` on ejection). `DYING` counts as alive for win conditions. Starting a meeting finalizes all `DYING` and turns every `BODY` into `GHOST`. Win conditions are an ordered list in `reduce.ts` (`WIN_CONDITIONS`) so a tasks condition can plug in later.
 
-## Mobile browser constraints (SPEC.md §12)
+### Web client
 
-The server is plain HTTP on the LAN, which limits some web APIs:
-- Wake Lock API only works in a secure context — use it when available, otherwise fall back to a muted looping video (NoSleep.js technique). Critical for the body's QR screen.
-- Vibration API doesn't exist on iOS Safari — always pair vibration with a visual fallback.
-- Audio only unlocks after a user gesture (the "I'm ready" button plays a short sound; preload the alarm sound).
-- No `crypto.randomUUID`/`crypto.subtle` client-side (insecure context) — IDs and signatures are generated server-side only.
-- The device camera app may open a different browser than the one the player joined with — `/r/:token` and `/e/:token` must handle "no session in this browser" gracefully.
+`lib/socket.ts: useGameConnection` opens one socket per view; rendering depends only on the latest `state:sync`, other events only trigger effects (alarm, vibration, QR). Deadlines are server timestamps: use `useNow()`/`serverNow()` from `lib/clock.ts` (clock offset synced over `clock:sync`). Mobile constraints (plain HTTP): wake lock via NoSleep.js video fallback, Web Audio synthesized sounds unlocked by a gesture, vibration always doubled by a visual cue, no `crypto.randomUUID` client-side; after a reload, the next tap re-arms sound and wake lock (`lib/wakeLock.ts`).
 
-## Docker
+## Tests
 
-MVP dev iterates without Docker (faster: no image rebuild per change) — run server/web directly with Node 22 + pnpm. Docker (Dockerfile, docker-compose, env vars per §4) stays the target for final deployment on the Pi/mini-PC: reintroduce it before the real event, since it's what makes the deploy reproducible (native `better-sqlite3` build for ARM, env config, restart behavior) rather than hand-configured on the Pi.
-
-## Dev workflow (SPEC.md §13, once scaffolded)
-
-- `?dev=1` URL param stores the session in `sessionStorage` instead of `localStorage`, so multiple players can be opened in tabs of the same browser.
-- `pnpm simulate --players 8` — automated Socket.IO clients that join, ready up, and run a scenario (kill, report, vote) to test without physical phones.
-- Optional dev-only time accelerator (multiplies durations).
-
-## Implementation plan (SPEC.md §16)
-
-Build in this order, keeping the project working and tested after each step: 1) monorepo/shared/server skeleton + Docker + health route, 2) pure engine + unit tests, 3) transport (Socket.IO/REST/sessions/admin auth), 4) SQLite persistence + restart recovery, 5) player view, 6) TV view, 7) admin console + printable emergency QR, 8) mobile constraints (§12) + simulation script. Run tests and verify the Docker build after each step.
+`apps/server/test/`: `engine.test.ts` drives the reducer with `Harness` (fake clock that fires derived timers in order); `integration.test.ts` boots the real app on a random port with a temp SQLite file and uses `TestClient` (also reused by `scripts/simulate.ts`).
 
 ## Out of scope for MVP
 
-Tasks/chores (deferred — only extension points are reserved, see SPEC.md §15: a `Station` entity, `/s/:token` prefix, a slot in `state:sync`, a pluggable task win condition, the `freezeTasksDuringMeeting` param), sabotage/minigames, ESP32/MQTT hardware, killer self-ID by victim, game pause, cross-game stats.
+Tasks (extension points only: `Station` type, `/s/` prefix, `tasks` slot in `PlayerView`, `WIN_CONDITIONS`, `freezeTasksDuringMeeting`), sabotage/minigames, ESP32/MQTT hardware, killer self-ID by victim, game pause, cross-game stats.
