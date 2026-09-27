@@ -11,6 +11,7 @@ import { canVibrate, vibrate, VIBRATION } from "../lib/vibration";
 import { enableWakeLock } from "../lib/wakeLock";
 import type { Send } from "./PlayerApp";
 import { SabotageMenu, SabotageTarget } from "./sabotage";
+import { TaskList } from "./tasks";
 
 /** Opens a station from its printed code; resolves to true on success. */
 export type OpenStationFn = (at: StationAccess) => Promise<boolean>;
@@ -197,7 +198,7 @@ function RolePad({ view, send }: { view: PlayerView; send: Send }) {
   const [menu, setMenu] = useState(false);
   return (
     <>
-      <HoldToReveal hint="Maintenir pour voir ton rôle" onAction={(action) => action === "sabotage" && setMenu(true)}>
+      <HoldToReveal hint="Maintenir pour voir ton rôle" overlay onAction={(action) => action === "sabotage" && setMenu(true)}>
         <RoleCard view={view} />
       </HoldToReveal>
       {menu && view.me.role === "impostor" && <SabotageMenu view={view} send={send} onClose={() => setMenu(false)} />}
@@ -254,15 +255,18 @@ export function PlayingScreen({ view, send, openStation }: { view: PlayerView; s
 
       <SabotageBanner view={view} />
 
-      <div className={`panel hero grow${view.sabotage ? " compact" : ""}`}>
-        {!view.sabotage && <Crewmate color={me.color} size={110} />}
-        <div className="big">Partie en cours</div>
-        <p className="muted small" style={{ margin: 0 }}>
-          Réunion d'urgence : {left > 0 ? `${left} restante(s)` : "aucune restante"}
-          {left > 0 && emergencyIn > 0 ? ` · dispo dans ${emergencyIn} s` : ""}
-        </p>
-        {/* Extension point: task list (out of MVP scope). */}
-      </div>
+      {view.tasks && view.tasks.length > 0 ? (
+        <TaskList view={view} />
+      ) : (
+        <div className={`panel hero grow${view.sabotage ? " compact" : ""}`}>
+          {!view.sabotage && <Crewmate color={me.color} size={110} />}
+          <div className="big">Partie en cours</div>
+        </div>
+      )}
+      <p className="muted small center" style={{ margin: 0 }}>
+        Réunion d'urgence : {left > 0 ? `${left} restante(s)` : "aucune restante"}
+        {left > 0 && emergencyIn > 0 ? ` · dispo dans ${emergencyIn} s` : ""}
+      </p>
 
       <div className="code-buttons">
         <CodeEntry
@@ -398,14 +402,15 @@ export function GhostScreen({ view, send, openStation }: { view: PlayerView; sen
     <div className="screen">
       <PlayerChip player={view.me} strike />
       <SabotageBanner view={view} />
-      <div className={`panel hero grow${view.sabotage ? " compact" : ""}`}>
-        {!view.sabotage && <Crewmate color={view.me.color} size={110} variant="ghost" />}
+      <div className={`panel hero${view.sabotage || view.tasks?.length ? " compact" : " grow"}`}>
+        {!view.sabotage && !view.tasks?.length && <Crewmate color={view.me.color} size={110} variant="ghost" />}
         <div className="title">Tu es un fantôme</div>
         <p className="big" style={{ margin: 0 }}>
           Tu ne parles jamais aux vivants.
         </p>
         {view.me.ejected && <p className="muted">Tu as été éjecté.</p>}
       </div>
+      {view.tasks && view.tasks.length > 0 && <TaskList view={view} />}
       {view.stations.length > 0 && (
         <div className="code-buttons">
           <StationCodeEntry openStation={openStation} />

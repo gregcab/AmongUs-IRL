@@ -1,7 +1,8 @@
 import type { GameParams } from "./params";
+import { TASK_DEFS, type TaskType } from "./tasks";
 
 // A station is a physical spot with a printed QR code (`/s/:token`) where players repair
-// sabotages or, later, do their tasks. Tokens are bound to the game and change with it.
+// sabotages or do their tasks. Tokens are bound to the game and change with it.
 
 export const SABOTAGE_KINDS = ["reactor", "oxygen", "lights"] as const;
 export type SabotageKind = (typeof SABOTAGE_KINDS)[number];
@@ -23,6 +24,8 @@ export interface StationDef {
   purpose: string;
   /** Sabotage repaired at this station, if any. */
   sabotage?: SabotageKind;
+  /** Task done at this station, if any. */
+  task?: TaskType;
 }
 
 export const STATION_DEFS = [
@@ -32,6 +35,19 @@ export const STATION_DEFS = [
   { id: "o2-b", name: "O2 réserve", purpose: "Oxygène : taper le code lu à la station Admin", sabotage: "oxygen" },
   { id: "admin", name: "Admin", purpose: "Oxygène : affiche les deux codes des stations O2", sabotage: "oxygen" },
   { id: "electrical", name: "Électricité", purpose: "Lumières : remettre tous les interrupteurs", sabotage: "lights" },
+  { id: "card", name: "Lecteur de carte", purpose: "Tâche commune : glisser la carte d'accès", task: "card" },
+  { id: "data-download", name: "Données (téléchargement)", purpose: "Tâche longue, étape 1 : télécharger (20 s)", task: "data" },
+  { id: "data-upload", name: "Données (envoi)", purpose: "Tâche longue, étape 2 : envoyer (20 s) ; loin de l'étape 1", task: "data" },
+  { id: "fuel-tank", name: "Réserve de carburant", purpose: "Tâche longue, étape 1 : remplir le bidon (10 s)", task: "fuel" },
+  { id: "engine", name: "Moteur", purpose: "Tâche longue, étape 2 : vider le bidon (10 s) ; loin de l'étape 1", task: "fuel" },
+  { id: "wires", name: "Câblage", purpose: "Tâche courte : brancher les câbles", task: "wires" },
+  { id: "safe", name: "Coffre-fort", purpose: "Tâche courte : code du coffre", task: "safe" },
+  { id: "distributor", name: "Distributeur", purpose: "Tâche courte : calibrer le distributeur", task: "distributor" },
+  { id: "simon", name: "Démarreur du réacteur", purpose: "Tâche courte : séquence de couleurs (Simon)", task: "simon" },
+  { id: "antenna", name: "Antenne", purpose: "Tâche courte : aligner l'antenne", task: "antenna" },
+  { id: "key-a", name: "Clé A", purpose: "Tâche à deux : tourner en même temps que la Clé B (placer loin l'une de l'autre)", task: "doubleKey" },
+  { id: "key-b", name: "Clé B", purpose: "Tâche à deux : tourner en même temps que la Clé A", task: "doubleKey" },
+  { id: "shield", name: "Boucliers", purpose: "Tâche à trois : maintenir le doigt ensemble 10 s", task: "shield" },
 ] as const satisfies readonly StationDef[];
 
 export type StationId = (typeof STATION_DEFS)[number]["id"];
@@ -69,8 +85,15 @@ export interface StationSetup {
 
 /** Stations used by the current settings, i.e. the ones to print. */
 export function stationEnabled(params: GameParams, id: StationId): boolean {
-  const kind = stationDef(id).sabotage;
-  return kind !== undefined && params.enabledSabotages.includes(kind);
+  const { sabotage, task } = stationDef(id);
+  if (sabotage) return params.enabledSabotages.includes(sabotage);
+  return task !== undefined && params.enabledTasks.includes(task);
+}
+
+/** Stations of each task step, typed. */
+export function taskStations(type: TaskType, step: number): StationId[] {
+  const def = TASK_DEFS.find((d) => d.type === type)!;
+  return [...(def.steps[step] ?? [])] as StationId[];
 }
 
 export const STATION_NAME_MAX = 30;

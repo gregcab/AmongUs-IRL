@@ -34,6 +34,7 @@ export const NO_EJECTION_LABEL: Record<NoEjectionReason, string> = {
 export const WIN_REASON_TEXT: Record<WinReason, string> = {
   impostorsOut: "Tous les imposteurs ont été éliminés",
   parity: "Les imposteurs sont aussi nombreux que les équipiers",
+  tasks: "Toutes les tâches sont terminées",
   reactor: "Le réacteur a fondu",
   oxygen: "Plus d'oxygène à bord",
   admin: "Partie terminée par le maître du jeu",

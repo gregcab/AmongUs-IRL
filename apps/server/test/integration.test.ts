@@ -1,4 +1,4 @@
-import { ADMIN_COOKIE, PLAYER_COLORS, SESSION_HEADER, type ClientView, type PlayerView } from "@among-us/shared";
+import { ADMIN_COOKIE, PLAYER_COLORS, SESSION_HEADER, STATION_IDS, type ClientView, type PlayerView } from "@among-us/shared";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -231,7 +231,7 @@ describe("server integration", () => {
     for (const p of ps) await p.c.ok("lobby:ready");
     await mj.ok("admin:updateParams", { params: { sabotageCooldownSeconds: 5 } });
     const stations = app.transport.printableStations();
-    expect(stations.map((st) => st.id)).toEqual(["reactor-a", "reactor-b", "o2-a", "o2-b", "admin", "electrical"]);
+    expect(stations.map((st) => st.id)).toEqual(STATION_IDS);
     expect(new Set(stations.map((st) => st.code)).size).toBe(stations.length);
     const at = (id: string) => ({ token: stations.find((st) => st.id === id)!.url.split("/s/")[1]! });
     const codeOf = (id: string) => stations.find((st) => st.id === id)!.code;
@@ -263,11 +263,39 @@ describe("server integration", () => {
     expect(!locked.ok && locked.error.code).toBe("RATE_LIMITED");
   });
 
+  it("does tasks at their stations; impostors' fake tasks leave the bar alone", async () => {
+    const ps = await players(5);
+    const mj = await admin();
+    for (const p of ps) await p.c.ok("lobby:ready");
+    await mj.ok("admin:updateParams", { params: { enabledTasks: ["wires", "card"], commonTasks: 1, longTasks: 0, shortTasks: 1 } });
+    await mj.ok("admin:start", {});
+    for (const p of ps) await p.c.until((v) => v.phase === "PLAYING", 3000);
+    const codes = new Map(app.transport.printableStations().map((st) => [st.id, st.code]));
+    const impostor = ps.find((p) => asPlayer(p.c.view!).me.role === "impostor")!;
+    const crew = ps.find((p) => p !== impostor)!;
+
+    const tasks = asPlayer(crew.c.view!).tasks!;
+    expect(tasks.map((t) => t.type)).toEqual(["card", "wires"]);
+    expect(asPlayer(impostor.c.view!).tasks!.map((t) => t.type)).toEqual(["card", "wires"]);
+    const wrong = await crew.c.send("task:complete", { at: { code: codes.get("card") }, taskId: "t2" });
+    expect(!wrong.ok && wrong.error.code).toBe("WRONG_STATION");
+
+    await impostor.c.ok("task:complete", { at: { code: codes.get("card") }, taskId: "t1" });
+    await impostor.c.until((v) => asPlayer(v).tasks![0]!.done);
+    expect(asPlayer(crew.c.view!).taskBar).toEqual({ done: 0, total: 8 });
+
+    await crew.c.ok("task:complete", { at: { code: codes.get("card") }, taskId: "t1" });
+    const bar = await ps[4]!.c.until((v) => v.taskBar?.done === 1);
+    expect(bar.taskBar).toEqual({ done: 1, total: 8 });
+    const mjView = await mj.until((v) => v.kind === "admin" && v.taskProgress.done === 1);
+    expect(mjView.kind === "admin" && mjView.taskProgress).toEqual({ done: 1, total: 8 });
+  });
+
   it("serves the printable stations page to the admin only", async () => {
     expect((await fetch(`${url}/api/print/stations`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/stations`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });
     const html = await res.text();
-    expect(html.match(/<svg/g)).toHaveLength(6);
+    expect(html.match(/<svg/g)).toHaveLength(STATION_IDS.length);
     expect(html).toContain("Électricité");
   });
 
@@ -290,7 +318,7 @@ describe("server integration", () => {
     expect(app.runtime.state.params.enabledSabotages).toEqual(["reactor", "oxygen", "lights"]);
     expect(app.runtime.state.params.sabotageCooldownSeconds).toBe(90);
     const tv = await client({ tv: true });
-    expect((await tv.until((v) => v.kind === "tv")).stations).toHaveLength(6);
+    expect((await tv.until((v) => v.kind === "tv")).stations).toHaveLength(STATION_IDS.length);
   });
 
   it("restores state, sessions and timers after a restart", async () => {

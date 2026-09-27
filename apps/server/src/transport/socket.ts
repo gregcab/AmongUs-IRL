@@ -199,6 +199,12 @@ export class Transport {
         typeof p.index === "number" ? { type: "station:switch", playerId, stationId, index: p.index } : null,
       ),
     );
+    socket.on("task:complete", (payload, ack) =>
+      this.onStation(socket, payload, ack, (playerId, stationId, p) =>
+        typeof p.taskId === "string" ? { type: "task:complete", playerId, stationId, taskId: p.taskId } : null,
+      ),
+    );
+    socket.on("task:keyTurn", (payload, ack) => this.onStation(socket, payload, ack, (playerId, stationId) => ({ type: "task:keyTurn", playerId, stationId })));
 
     for (const name of PLAYER_EVENTS) {
       if (name === "lobby:join") continue;
@@ -387,6 +393,11 @@ export class Transport {
       case "admin:revive": {
         const playerId = str(p.playerId);
         return playerId ? { type: name, playerId } : null;
+      }
+      case "admin:completeTask": {
+        const playerId = str(p.playerId);
+        const taskId = str(p.taskId);
+        return playerId && taskId ? { type: name, playerId, taskId } : null;
       }
       case "admin:rename": {
         const playerId = str(p.playerId);

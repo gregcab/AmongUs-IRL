@@ -40,6 +40,8 @@ export type Command =
   | PlayerCommand<"station:hold", { stationId: StationId; holding: boolean }>
   | PlayerCommand<"station:code", { stationId: StationId; code: string }>
   | PlayerCommand<"station:switch", { stationId: StationId; index: number }>
+  | PlayerCommand<"task:complete", { stationId: StationId; taskId: string }>
+  | PlayerCommand<"task:keyTurn", { stationId: StationId }>
   | PlayerCommand<"system:connection", { connected: boolean }>
   // Admin
   | { type: "admin:updateParams"; params: Partial<GameParams> }
@@ -54,12 +56,14 @@ export type Command =
   | { type: "admin:backToLobby" }
   | { type: "admin:updateStation"; stationId: StationId; name: string; location: string }
   | { type: "admin:repairSabotage" }
+  | { type: "admin:completeTask"; playerId: string; taskId: string }
   // Scheduler
   | { type: "tick:phaseEnd"; key: string }
   | { type: "tick:deathEffective"; playerId: string; at: number }
   | { type: "tick:killReady"; at: number }
   | { type: "tick:sabotageDeadline"; at: number }
-  | { type: "tick:holdExpired"; stationId: StationId; playerId: string; until: number };
+  | { type: "tick:holdExpired"; stationId: StationId; playerId: string; until: number }
+  | { type: "tick:shieldCharged"; at: number };
 
 export type CommandType = Command["type"];
 export type TickCommand = Extract<Command, { type: `tick:${string}` }>;

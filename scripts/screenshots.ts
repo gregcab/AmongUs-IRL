@@ -6,7 +6,7 @@
  *
  * Requires Google Chrome installed locally (driven through playwright-core).
  */
-import { SESSION_HEADER, type PlayerView } from "../packages/shared/src/index";
+import { SESSION_HEADER, taskStations, type AdminView, type PlayerView, type TaskType } from "../packages/shared/src/index";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -21,7 +21,7 @@ const PIN = "1234";
 
 const PHONE: BrowserContextOptions = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const TV: BrowserContextOptions = { viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 };
-const DESKTOP: BrowserContextOptions = { viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 };
+const DESKTOP: BrowserContextOptions = { viewport: { width: 1400, height: 1250 }, deviceScaleFactor: 1 };
 
 // Headless Chrome refuses the Wake Lock; a stub keeps the "tap to re-enable" banner away.
 const STUB_WAKE_LOCK = () => {
@@ -197,13 +197,43 @@ async function play(browser: Browser, url: string, app: App): Promise<void> {
   await impostorPhone.context().close();
 
   await admin.ok("admin:advancePhase");
-  await phone.getByText("Partie en cours").waitFor();
+  await phone.getByText("Mes tâches").waitFor();
   await tap(phone);
+
+  // Tasks: some crewmates are already at work, the bar moves on the TV and the phones.
+  const adminState = () => (admin.view as AdminView).state;
+  await admin.until((v) => v.phase === "PLAYING");
+  for (const b of crew.slice(0, 3)) {
+    for (const t of adminState().players[b.id]!.tasks!.slice(0, 2)) await admin.ok("admin:completeTask", { playerId: b.id, taskId: t.id });
+  }
   await shot(phone, "phone-playing");
+  await shot(tv, "tv-playing");
+
+  // Camille does one of her tasks at its station.
+  const camille = Object.values(adminState().players).find((p) => p.name === "Camille")!;
+  const preferred: TaskType[] = ["wires", "simon", "safe", "distributor", "antenna", "card"];
+  const task = preferred.map((type) => camille.tasks!.find((t) => t.type === type)).find(Boolean) ?? camille.tasks![0]!;
+  await phone.goto(stationUrl(taskStations(task.type, 0)[0]!));
+  await phone.locator(".minigame").waitFor();
+  await tap(phone);
+  if (task.type === "wires") {
+    // Plug two of the four wires.
+    for (const color of ["red", "blue"]) {
+      const from = (await phone.locator(`[data-wire="${color}"]`).boundingBox())!;
+      const to = (await phone.locator(`[data-plug="${color}"]`).boundingBox())!;
+      await phone.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await phone.mouse.down();
+      await phone.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+      await phone.mouse.up();
+    }
+  }
+  await shot(phone, "phone-task");
+  await phone.getByRole("button", { name: "Retour au jeu" }).click();
+  await phone.getByText("Mes tâches").waitFor();
 
   // Sabotage: the impostor's hidden menu, then the reactor alarm everywhere.
   const saboteurPhone = await open(browser, url, PHONE, { "amongus.session": impostors[0]!.token });
-  await saboteurPhone.getByText("Partie en cours").waitFor();
+  await saboteurPhone.getByText("Mes tâches").waitFor();
   await tap(saboteurPhone);
   await sleep(5500); // shared sabotage cooldown
   await openSabotageMenu(saboteurPhone);
@@ -224,7 +254,7 @@ async function play(browser: Browser, url: string, app: App): Promise<void> {
   await phone.getByText("Réparé").waitFor();
   await phone.locator(".reactor-pad, .station-idle").first().waitFor();
   await phone.getByRole("button", { name: "Retour au jeu" }).click();
-  await phone.getByText("Partie en cours").waitFor();
+  await phone.getByText("Mes tâches").waitFor();
 
   // Kill: the victim's phone becomes the body.
   const [victim, reporter] = crew as [Bot, Bot];

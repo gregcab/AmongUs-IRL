@@ -2,6 +2,7 @@ import {
   SABOTAGE_LABEL,
   SKIP_VOTE,
   stationDef,
+  taskDef,
   type AdminView,
   type GameParams,
   type Player,
@@ -15,6 +16,7 @@ import { GameOverBlock, meetingReason, NO_EJECTION_LABEL, ROLE_LABEL, SUBPHASE_L
 import { getAdminToken, setAdminToken } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { ConnectionBanner, Countdown, Logo, PlayerChip, useToast } from "../lib/ui";
+import { TaskBar } from "../lib/taskbar";
 import { ParamsForm } from "./ParamsForm";
 import "./admin.css";
 
@@ -142,8 +144,14 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
           <PlayersTable view={view} send={send} confirmThen={confirmThen} />
         </section>
 
+        {view.phase !== "LOBBY" && view.taskProgress.total + Object.values(s.players).filter((p) => p.tasks?.length).length > 0 && (
+          <section className="panel stack admin-wide">
+            <TasksPanel view={view} confirmThen={confirmThen} />
+          </section>
+        )}
+
         {view.phase === "LOBBY" && (
-          <section className="panel stack">
+          <section className="panel stack admin-wide">
             <h3>Paramètres</h3>
             <ParamsForm params={s.params} onSave={(params: Partial<GameParams>) => send("admin:updateParams", { params })} />
           </section>
@@ -473,6 +481,53 @@ function StationRow({ station, send }: { station: Station; send: AdminSend }) {
       </button>
       <span className="muted small station-purpose">{stationDef(station.id).purpose}</span>
     </form>
+  );
+}
+
+function TasksPanel({ view, confirmThen }: { view: AdminView; confirmThen: (message: string, name: string, payload?: unknown) => void }) {
+  const players = Object.values(view.state.players).sort((a, b) => a.joinedAt - b.joinedAt) as AdminPlayer[];
+  const live = view.phase === "PLAYING" || view.phase === "MEETING";
+  return (
+    <>
+      <div className="row spread" style={{ flexWrap: "wrap" }}>
+        <h3>Tâches</h3>
+        <span className="muted small">
+          {view.taskProgress.done} / {view.taskProgress.total} tâches d'équipiers · barre joueurs : {view.params.taskBarUpdates === "always" ? "toujours" : view.params.taskBarUpdates === "meetings" ? "réunions" : "jamais"}
+        </span>
+      </div>
+      <TaskBar bar={view.taskProgress} />
+      <div className="admin-tasks">
+        {players.map((p) => (
+          <div key={p.id} className="admin-task-row">
+            <span className="row" style={{ gap: 6 }}>
+              <PlayerChip player={p} />
+              {p.role === "impostor" && <span className="role-impostor small">(fausses)</span>}
+            </span>
+            <span className="admin-task-chips">
+              {(p.tasks ?? []).map((t) => {
+                const def = taskDef(t.type);
+                return (
+                  <span key={t.id} className={`admin-task${t.done ? " done" : ""}`} title={def.help}>
+                    {t.done ? "✓ " : ""}
+                    {def.name}
+                    {!t.done && def.steps.length > 1 && ` (${t.step}/${def.steps.length})`}
+                    {!t.done && live && (
+                      <button
+                        type="button"
+                        className="admin-task-validate"
+                        onClick={() => confirmThen(`Valider « ${def.name} » pour ${p.name} ?`, "admin:completeTask", { playerId: p.id, taskId: t.id })}
+                      >
+                        Valider
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

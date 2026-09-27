@@ -5,6 +5,7 @@ import { AlarmOverlay, GameOverBlock, meetingReason, ResultBlock, SUBPHASE_LABEL
 import { useGameConnection } from "../lib/socket";
 import { Crewmate } from "../lib/crewmate";
 import { SabotageAlert, SabotageInfo } from "../lib/stations";
+import { TaskBar } from "../lib/taskbar";
 import { ConnectionBanner, Countdown, Logo, QrCode } from "../lib/ui";
 import "./tv.css";
 
@@ -116,11 +117,22 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
       return view.sabotage ? (
         <div className={`tv-center tv-sabotage tv-sabotage-${view.sabotage.kind}`}>
           <SabotageInfo sabotage={view.sabotage} stations={view.stations} large />
+          {view.taskBar && (
+            <div className="tv-taskbar">
+              <TaskBar bar={view.taskBar} large />
+            </div>
+          )}
         </div>
       ) : (
         <div className="tv-center tv-calm">
           <div className="tv-huge">Partie en cours</div>
           <p className="tv-sub">En cas de réunion, rendez-vous au point de rassemblement</p>
+          {view.taskBar && (
+            <div className="tv-taskbar">
+              <TaskBar bar={view.taskBar} large />
+              {view.params.taskBarUpdates === "meetings" && <p className="tv-sub small-sub">Barre mise à jour pendant les réunions</p>}
+            </div>
+          )}
         </div>
       );
     case "MEETING":
@@ -217,6 +229,11 @@ function Meeting({ view, meeting }: { view: TvView; meeting: PublicMeeting }) {
         <div>
           <div className="tv-phase">{SUBPHASE_LABEL[meeting.subPhase]}</div>
           <div className="tv-sub">{meetingReason(meeting, view.players)}</div>
+          {view.taskBar && (
+            <div className="tv-meeting-taskbar">
+              <TaskBar bar={view.taskBar} />
+            </div>
+          )}
         </div>
         <Countdown endsAt={meeting.endsAt} className="tv-timer" />
       </div>

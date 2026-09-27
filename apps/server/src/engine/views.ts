@@ -13,6 +13,7 @@ import type {
   TvView,
 } from "@among-us/shared";
 import { enabledStations, isAlive, playersInOrder } from "./state";
+import { coopView, crewProgress, visibleTaskBar } from "./tasks";
 
 // Every function here decides what a given client may know. Role information must only
 // reach its owner, fellow impostors, the admin, or everybody once the game is over.
@@ -106,6 +107,8 @@ function baseView(s: GameState) {
     gameOver: gameOverInfo(s),
     stations: enabledStations(s),
     sabotage: publicSabotage(s),
+    taskBar: visibleTaskBar(s),
+    coop: coopView(s),
   };
 }
 
@@ -138,6 +141,7 @@ export function playerView(s: GameState, playerId: string): PlayerView | Anonymo
     if (s.phase === "PLAYING") view.sabotageCooldownEndsAt = s.sabotageCooldownEndsAt;
   }
   if (s.phase === "PLAYING") view.emergencyCooldownEndsAt = s.emergencyCooldownEndsAt;
+  if (revealed && p.tasks) view.tasks = p.tasks.map((t) => ({ ...t }));
   return view;
 }
 
@@ -155,5 +159,5 @@ export function adminView(s: GameState, joinUrl: string, emergencyUrl: string): 
   const players = Object.fromEntries(
     Object.values(s.players).map(({ sessionToken: _hidden, ...rest }) => [rest.id, rest]),
   );
-  return { kind: "admin", ...baseView(s), state: { ...structuredClone(s), players }, joinUrl, emergencyUrl };
+  return { kind: "admin", ...baseView(s), state: { ...structuredClone(s), players }, joinUrl, emergencyUrl, taskProgress: crewProgress(s) };
 }

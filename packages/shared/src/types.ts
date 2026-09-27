@@ -1,5 +1,6 @@
 import type { GameParams } from "./params";
 import type { SabotageKind, StationId, StationSetup } from "./stations";
+import type { TaskType } from "./tasks";
 
 export type Role = "crew" | "impostor";
 export type Team = "crew" | "impostors";
@@ -10,7 +11,7 @@ export type MeetingType = "body" | "emergency" | "admin";
 export type GhostMeetingMode = "cemetery" | "spectator";
 export type VoteChoice = string; // player id or SKIP_VOTE
 /** Why the game ended. */
-export type WinReason = "impostorsOut" | "parity" | "reactor" | "oxygen" | "admin";
+export type WinReason = "impostorsOut" | "parity" | "tasks" | "reactor" | "oxygen" | "admin";
 export const SKIP_VOTE = "skip";
 
 export interface Player {
@@ -28,6 +29,22 @@ export interface Player {
   joinedAt: number;
   /** Scanned the lobby practice QR from this session's browser (kept across games). */
   scanOk?: boolean;
+  /** Drawn at game start; an impostor's list is fake (same look, no effect on the bar). */
+  tasks?: PlayerTask[];
+}
+
+export interface PlayerTask {
+  /** Position-based id ("t1"…), identical in shape for crewmates and impostors. */
+  id: string;
+  type: TaskType;
+  /** Index of the current step; equals the number of steps once done. */
+  step: number;
+  done: boolean;
+}
+
+export interface TaskProgress {
+  done: number;
+  total: number;
 }
 
 /** Why nobody was ejected: tie at the top, "skip" on top, or no vote at all. */
@@ -122,6 +139,14 @@ export interface GameState {
   sabotageCooldownEndsAt?: number;
   /** Fingers held on a station: player id → hold expiry (renewed by heartbeats). */
   holds?: Partial<Record<StationId, Record<string, number>>>;
+  /** Task bar frozen at the last meeting (`taskBarUpdates: "meetings"`). */
+  taskBarSnapshot?: TaskProgress;
+  /** Double key: last turn at each key station. */
+  keyTurns?: Partial<Record<StationId, { playerId: string; at: number }>>;
+  keyMatchAt?: number;
+  /** Shield: enough players have been holding together since then. */
+  shieldChargeStartedAt?: number;
+  shieldDoneAt?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +243,17 @@ export interface SelfView {
   ejected: boolean;
 }
 
+/** Live state of the cooperative task stations, for the phones standing there. */
+export interface CoopView {
+  /** Double key: time of the last turn at each key station. */
+  keyTurns: Partial<Record<StationId, number>>;
+  keyMatchAt?: number;
+  /** Shield: players holding the station, and since when the charge runs. */
+  shieldHolders: number;
+  shieldChargeStartedAt?: number;
+  shieldDoneAt?: number;
+}
+
 interface BaseView {
   gameId: string;
   phase: Phase;
@@ -229,6 +265,9 @@ interface BaseView {
   /** Stations used by the current settings. */
   stations: Station[];
   sabotage?: PublicSabotage;
+  /** Crew task bar as the settings allow it to be seen (absent with `taskBarUpdates: "never"`). */
+  taskBar?: TaskProgress;
+  coop?: CoopView;
 }
 
 export interface PlayerView extends BaseView {
@@ -240,8 +279,8 @@ export interface PlayerView extends BaseView {
   /** Impostors only (ghosts included). */
   sabotageCooldownEndsAt?: number;
   emergencyCooldownEndsAt?: number;
-  /** Extension point for tasks (out of MVP scope). */
-  tasks?: never[];
+  /** The player's own tasks (a fake list for impostors, identical in shape). */
+  tasks?: PlayerTask[];
 }
 
 export interface AnonymousView extends BaseView {
@@ -260,6 +299,8 @@ export interface AdminView extends BaseView {
   state: Omit<GameState, "players"> & { players: Record<string, Omit<Player, "sessionToken">> };
   joinUrl: string;
   emergencyUrl: string;
+  /** Live crew task bar, whatever the players are allowed to see. */
+  taskProgress: TaskProgress;
 }
 
 export type ClientView = PlayerView | AnonymousView | TvView | AdminView;

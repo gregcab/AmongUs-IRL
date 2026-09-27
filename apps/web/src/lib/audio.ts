@@ -97,3 +97,16 @@ export function playClick(): void {
   tone(1200, 0, 0.05, 0.15, "square");
 }
 
+/** Short musical note (Simon pads, gauges). */
+export function playNote(freq: number, duration = 0.25): void {
+  tone(freq, 0, duration, 0.25, "triangle");
+}
+
+export function playError(): void {
+  tone(160, 0, 0.3, 0.3, "square");
+}
+
+export function playSuccess(): void {
+  [659, 880, 1175].forEach((f, i) => tone(f, i * 0.09, 0.18, 0.25, "sine"));
+}
+

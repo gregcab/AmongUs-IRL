@@ -11,6 +11,7 @@ import { playClick } from "../lib/audio";
 import { SabotageInfo, StationName, stationById } from "../lib/stations";
 import { HoldPad } from "../lib/ui";
 import type { Send } from "./PlayerApp";
+import { TaskStation } from "./tasks";
 
 export interface OpenStation {
   id: StationId;
@@ -34,6 +35,11 @@ export function StationScreen({ view, station, send, onClose }: { view: PlayerVi
       </div>
       {!enabled ? (
         <div className="panel center big">Station inactive pour cette partie.</div>
+      ) : stationDef(station.id).task ? (
+        <>
+          {view.sabotage && <SabotageInfo sabotage={view.sabotage} stations={view.stations} />}
+          <TaskStation view={view} station={station} send={send} />
+        </>
       ) : (
         <StationContent view={view} station={station} send={send} />
       )}

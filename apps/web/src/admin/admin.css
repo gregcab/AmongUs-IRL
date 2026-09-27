@@ -96,6 +96,23 @@
   border-bottom: 1px solid var(--line);
 }
 
+.params-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px 36px;
+  align-items: start;
+}
+
+.params-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.params-actions {
+  grid-column: 1 / -1;
+}
+
 .params-form label {
   display: flex;
   align-items: center;
@@ -152,5 +169,60 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 12px 20px;
+}
+
+.task-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.admin-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-task-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 0.85rem;
+}
+
+.admin-task.done {
+  padding-right: 10px;
+  border-color: rgba(47, 208, 138, 0.55);
+  color: var(--ok);
+}
+
+.admin-task-validate {
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #28335a;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 

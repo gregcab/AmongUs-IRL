@@ -13,6 +13,7 @@ export class GameRuntime {
   private current: GameState;
   private readonly scheduler: Scheduler;
   private readonly listeners: ResultListener[] = [];
+  private stopped = false;
 
   constructor(
     private readonly persistence: Persistence,
@@ -40,6 +41,8 @@ export class GameRuntime {
 
   dispatch(command: Command): ReduceResult {
     const previous = this.current;
+    // Sockets closing during shutdown must not re-arm timers or write to a closed database.
+    if (this.stopped) return { state: previous, events: [], timers: [], error: { code: "WRONG_PHASE", message: "Serveur arrêté" } };
     const result = reduce(previous, command, this.clock(), this.rng);
     if (result.error || result.state === previous) return result;
     this.current = result.state;
@@ -54,6 +57,7 @@ export class GameRuntime {
   }
 
   stop(): void {
+    this.stopped = true;
     this.scheduler.clear();
   }
 }

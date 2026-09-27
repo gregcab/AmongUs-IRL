@@ -5,11 +5,22 @@
  *   pnpm simulate --players 4 --passive       bots join, get ready, arrive and vote "skip" on their own;
  *                                             the game is driven from /admin (useful with a real phone)
  *
- * In both modes, living bots repair every sabotage (reactor, oxygen, lights) at the stations.
- * Options: --url http://localhost:8080  --pin 1234  --seed 42
+ * In both modes, living bots repair every sabotage (reactor, oxygen, lights) at the stations,
+ * and bots (ghosts included) do one task step every --task-every seconds (default 20; 0 = never).
+ * Options: --url http://localhost:8080  --pin 1234  --seed 42  --task-every 20
  */
 import type { ClientView, PlayerView, SabotageKind, StationId } from "../packages/shared/src/index";
-import { ADMIN_COOKIE, OXYGEN_CODE_STATIONS, PLAYER_COLORS, SABOTAGE_LABEL, SABOTAGE_STATIONS, SESSION_HEADER, SKIP_VOTE } from "../packages/shared/src/index";
+import {
+  ADMIN_COOKIE,
+  OXYGEN_CODE_STATIONS,
+  PLAYER_COLORS,
+  SABOTAGE_LABEL,
+  SABOTAGE_STATIONS,
+  SESSION_HEADER,
+  SKIP_VOTE,
+  taskDef,
+  taskStations,
+} from "../packages/shared/src/index";
 import { TestClient } from "../apps/server/test/client";
 
 function arg(name: string, fallback: string): string {
@@ -21,6 +32,7 @@ const url = arg("url", process.env.SIM_URL ?? "http://localhost:8080");
 const pin = arg("pin", process.env.ADMIN_PIN ?? "1234");
 const count = Number(arg("players", "6"));
 const passive = process.argv.includes("--passive");
+const taskEvery = Number(arg("task-every", "20"));
 let seed = Number(arg("seed", String(Date.now() % 100000)));
 
 const random = () => {
@@ -129,6 +141,51 @@ function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>
   });
 }
 
+/**
+ * Bots work through their task lists at a slow pace, one step at a time. Cooperative tasks
+ * enlist other bots: a partner turns the other key, two helpers hold the shield.
+ */
+function autoTasks(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>): void {
+  if (!(taskEvery > 0)) return;
+  let busy = false;
+  const working = (b: Bot) => pv(b)?.phase === "PLAYING" && status(b) !== "BODY";
+  setInterval(async () => {
+    if (busy) return;
+    const candidates = bots.filter((b) => working(b) && pv(b).tasks?.some((t) => !t.done));
+    if (candidates.length === 0) return;
+    busy = true;
+    try {
+      const codes = await getCodes();
+      const at = (id: StationId) => ({ code: codes.get(id)! });
+      const bot = pick(candidates);
+      const task = pick(pv(bot).tasks!.filter((t) => !t.done));
+      const def = taskDef(task.type);
+      if (task.type === "doubleKey") {
+        const partner = pick(bots.filter((b) => b !== bot && working(b)));
+        if (!partner) return;
+        await Promise.all([bot.c.send("task:keyTurn", { at: at("key-a") }), partner.c.send("task:keyTurn", { at: at("key-b") })]);
+        log(`${bot.name} et ${partner.name} tournent la double clé`);
+      } else if (task.type === "shield") {
+        const team = [bot, ...bots.filter((b) => b !== bot && working(b)).slice(0, (def.coop ?? 3) - 1)];
+        if (team.length < (def.coop ?? 3)) return;
+        const hold = (holding: boolean) => Promise.all(team.map((b) => b.c.send("station:hold", { at: at("shield"), holding })));
+        for (let i = 0; i < 8; i++) {
+          await hold(true);
+          await sleep(1500);
+        }
+        await hold(false);
+        log(`${team.map((b) => b.name).join(", ")} chargent le bouclier`);
+      } else {
+        const station = taskStations(task.type, task.step)[0]!;
+        const res = await bot.c.send("task:complete", { at: at(station), taskId: task.id });
+        if (res.ok) log(`${bot.name} : ${def.name}${def.steps.length > 1 ? ` (étape ${task.step + 1}/${def.steps.length})` : ""}`);
+      }
+    } finally {
+      busy = false;
+    }
+  }, taskEvery * 1000);
+}
+
 async function post(path: string, token: string, body: unknown) {
   const res = await fetch(url + path, {
     method: "POST",
@@ -146,6 +203,7 @@ async function runPassive(): Promise<void> {
   autoMeeting(bots, () => SKIP_VOTE);
   const admin = await new TestClient(url).connected();
   autoRepair(bots, () => stationCodes(admin));
+  autoTasks(bots, () => stationCodes(admin));
   log("Bots passifs connectés. Pilotez la partie depuis /admin. Ctrl+C pour quitter.");
   await new Promise(() => undefined);
 }
@@ -182,6 +240,7 @@ async function runScenario(): Promise<void> {
   });
   const codes = await stationCodes(admin);
   autoRepair(bots, async () => codes);
+  autoTasks(bots, async () => codes);
   let sabotaged = false;
 
   for (let round = 1; round < 30; round++) {
@@ -203,11 +262,13 @@ async function runScenario(): Promise<void> {
 
     // Wait for the team kill cooldown, then an impostor "touches" a crewmate.
     await sleep(Math.max(0, ((admin.view?.kind === "admin" && admin.view.state.killCooldownEndsAt) || 0) - Date.now()) + 200);
+    if (admin.view?.phase !== "PLAYING") continue; // a meeting or the end of the game came first
     const victims = bots.filter((b) => roleOf(b) === "crew" && status(b) === "ALIVE");
     if (victims.length === 0) break;
     const victim = pick(victims);
     log(`Tour ${round} : ${victim.name} est touché et déclare sa mort`);
-    await victim.c.ok("player:declareDeath");
+    const death = await victim.c.send("player:declareDeath");
+    if (!death.ok) continue;
     const after = await victim.c.until((v) => v.kind === "player" && (v.me.status === "BODY" || v.phase !== "PLAYING"), 60_000);
     if (after.phase === "GAME_OVER") break;
 
@@ -237,7 +298,7 @@ async function runScenario(): Promise<void> {
   }
 
   const over = await admin.until((v) => v.phase === "GAME_OVER", 120_000);
-  log(`Fin : ${over.gameOver?.winner === "crew" ? "victoire des équipiers" : "victoire des imposteurs"}`);
+  log(`Fin : ${over.gameOver?.winner === "crew" ? "victoire des équipiers" : "victoire des imposteurs"} (${over.gameOver?.reason ?? "?"})`);
   for (const b of bots) b.c.close();
   admin.close();
 }

@@ -1,5 +1,6 @@
 import { colorOf, type PublicPlayer } from "@among-us/shared";
 import QRCode from "qrcode";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { formatSeconds, secondsLeft, useNow } from "./clock";
 import { Crewmate } from "./crewmate";
@@ -37,7 +38,7 @@ export function Countdown({ endsAt, className, unit }: { endsAt?: number; classN
   );
 }
 
-function capture(el: Element, pointerId: number): void {
+export function capture(el: Element, pointerId: number): void {
   try {
     el.setPointerCapture(pointerId);
   } catch {
@@ -122,20 +123,25 @@ export function HoldButton({
 /**
  * Shows `children` only while the finger stays on the pad. Sliding the finger onto an element
  * marked `data-reveal-action` and releasing it there calls `onAction` (hidden menus).
+ * With `overlay`, the content covers the whole screen while held, so it stays reachable
+ * wherever the pad sits on a long page.
  */
 export function HoldToReveal({
   hint,
   children,
   className,
   onAction,
+  overlay,
 }: {
   hint: ReactNode;
   children: ReactNode;
   className?: string;
   onAction?: (action: string) => void;
+  overlay?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   const origin = useRef<{ x: number; y: number; id: number } | null>(null);
+  const layer = useRef<HTMLDivElement>(null);
   const hide = () => {
     origin.current = null;
     setShown(false);
@@ -146,8 +152,9 @@ export function HoldToReveal({
     // A tap on the spot where a button appears must not trigger it: the finger has to slide there.
     const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y) > 16;
     const target = moved ? document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-reveal-action]") : null;
+    const container = overlay ? layer.current : e.currentTarget;
     hide();
-    if (target && e.currentTarget.contains(target) && onAction) onAction(target.dataset.revealAction!);
+    if (target && container?.contains(target) && onAction) onAction(target.dataset.revealAction!);
   };
   return (
     <div
@@ -163,7 +170,7 @@ export function HoldToReveal({
       onLostPointerCapture={(e) => e.pointerId === origin.current?.id && hide()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {shown ? (
+      {shown && !overlay ? (
         children
       ) : (
         <span className="reveal-hint">
@@ -171,6 +178,14 @@ export function HoldToReveal({
           {hint}
         </span>
       )}
+      {shown &&
+        overlay &&
+        createPortal(
+          <div className="reveal-overlay" ref={layer}>
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

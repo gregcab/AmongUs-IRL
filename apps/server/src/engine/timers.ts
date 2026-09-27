@@ -1,4 +1,4 @@
-import type { GameState, StationId } from "@among-us/shared";
+import { SHIELD_CHARGE_MS, type GameState, type StationId } from "@among-us/shared";
 import { phaseKey } from "./state";
 import type { TimerRequest } from "./types";
 
@@ -28,11 +28,16 @@ export function timersFromState(s: GameState): TimerRequest[] {
     if (deadline !== undefined) {
       timers.push({ id: "sabotage", at: deadline, command: { type: "tick:sabotageDeadline", at: deadline } });
     }
-    for (const [stationId, holders] of Object.entries(s.holds ?? {}) as [StationId, Record<string, number>][]) {
-      for (const [playerId, until] of Object.entries(holders)) {
-        timers.push({ id: `hold:${stationId}:${playerId}`, at: until, command: { type: "tick:holdExpired", stationId, playerId, until } });
-      }
+  }
+  // Fingers on stations (reactor, shield) and the shield charge; tasks may run during meetings.
+  for (const [stationId, holders] of Object.entries(s.holds ?? {}) as [StationId, Record<string, number>][]) {
+    for (const [playerId, until] of Object.entries(holders)) {
+      timers.push({ id: `hold:${stationId}:${playerId}`, at: until, command: { type: "tick:holdExpired", stationId, playerId, until } });
     }
+  }
+  if (s.shieldChargeStartedAt !== undefined) {
+    const at = s.shieldChargeStartedAt + SHIELD_CHARGE_MS;
+    timers.push({ id: "shield", at, command: { type: "tick:shieldCharged", at } });
   }
   return timers;
 }

@@ -1,6 +1,6 @@
-import { DEFAULT_PARAMS, resolveImpostorCount, SKIP_VOTE, validateParams } from "@among-us/shared";
+import { DEFAULT_PARAMS, resolveImpostorCount, SKIP_VOTE, TASK_DEFS, validateParams, type StationId } from "@among-us/shared";
 import { describe, expect, it } from "vitest";
-import { computeEjection, playerView, reduce, timersFromState, tvView, voteOutcome } from "../src/engine";
+import { adminView, computeEjection, playerView, reduce, timersFromState, tvView, voteOutcome } from "../src/engine";
 import { Harness } from "./harness";
 
 const FAST = { roleRevealSeconds: 5, deathDelaySeconds: 10, killCooldownSeconds: 30 };
@@ -729,5 +729,175 @@ describe("sabotage", () => {
     h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-a", holding: true });
     const ids = timersFromState(JSON.parse(JSON.stringify(h.state))).map((t) => t.id).sort();
     expect(ids).toEqual(["hold:reactor-a:" + crew[0], "killReady", "sabotage"].sort());
+  });
+});
+
+describe("tasks", () => {
+  const TASKS = { ...FAST, sabotageCooldownSeconds: 20 };
+
+  function playing(n = 7, params = {}) {
+    const h = new Harness({ ...TASKS, ...params });
+    const roles = h.startGame(n);
+    return { h, ...roles };
+  }
+
+  const tasksOf = (h: Harness, id: string) => h.state.players[id]!.tasks!;
+  /** Completes every step of a single-player task at its stations. */
+  function finish(h: Harness, playerId: string, taskId: string) {
+    const task = tasksOf(h, playerId).find((t) => t.id === taskId)!;
+    const steps = TASK_DEFS.find((d) => d.type === task.type)!.steps;
+    for (let i = task.step; i < steps.length; i++) {
+      h.do({ type: "task:complete", playerId, stationId: steps[i]![0] as StationId, taskId });
+    }
+  }
+
+  it("draws one common, one long and three short tasks for everybody, impostors included", () => {
+    const { h, impostors, crew } = playing(8);
+    const common = tasksOf(h, crew[0]!)[0]!.type;
+    for (const id of Object.keys(h.state.players)) {
+      const tasks = tasksOf(h, id);
+      expect(tasks.map((t) => t.id)).toEqual(["t1", "t2", "t3", "t4", "t5"]);
+      expect(tasks[0]!.type).toBe(common);
+      const categories = tasks.map((t) => TASK_DEFS.find((d) => d.type === t.type)!.category);
+      expect(categories).toEqual(["common", "long", "short", "short", "short"]);
+      expect(new Set(tasks.map((t) => t.type)).size).toBe(5);
+    }
+    // Same shape for everybody: nothing tells a fake list apart.
+    const keys = (id: string) => {
+      const v = playerView(h.state, id);
+      return JSON.stringify(v.kind === "player" && Object.keys(v.tasks![0]!));
+    };
+    expect(keys(impostors[0]!)).toBe(keys(crew[0]!));
+    expect(h.state.taskBarSnapshot).toEqual({ done: 0, total: crew.length * 5 });
+  });
+
+  it("caps the draw by the enabled tasks", () => {
+    const { h } = playing(6, { enabledTasks: ["wires", "safe", "data"], commonTasks: 1, longTasks: 2, shortTasks: 5 });
+    for (const p of Object.values(h.state.players)) expect(p.tasks!.map((t) => t.type).sort()).toEqual(["data", "safe", "wires"]);
+    const none = playing(6, { enabledTasks: [] }).h;
+    expect(none.state.players.p1!.tasks).toEqual([]);
+    expect(tvView(none.state, "http://x").taskBar).toBeUndefined();
+  });
+
+  it("moves the bar for crewmates only; impostors' fake tasks look and answer the same", () => {
+    const { h, impostors, crew } = playing(7);
+    const a = h.try({ type: "task:complete", playerId: impostors[0]!, stationId: "card", taskId: "t1" });
+    const b = h.try({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" });
+    expect(a.error).toBeUndefined();
+    expect(b.error).toBeUndefined();
+    expect(a.events).toEqual(b.events);
+    expect(tasksOf(h, impostors[0]!)[0]).toMatchObject({ done: true });
+    expect(tvView(h.state, "http://x").taskBar).toEqual({ done: 1, total: crew.length * 5 });
+    expect(JSON.stringify(playerView(h.state, crew[1]!))).not.toContain(`"tasks":[{"id":"t1","type":"card","step":1`);
+  });
+
+  it("requires the steps in order, at the right stations", () => {
+    const { h, crew } = playing(7);
+    const long = tasksOf(h, crew[0]!)[1]!;
+    const [first, second] = TASK_DEFS.find((d) => d.type === long.type)!.steps as unknown as [[StationId], [StationId]];
+    expect(h.try({ type: "task:complete", playerId: crew[0]!, stationId: second[0], taskId: long.id }).error?.code).toBe("WRONG_STATION");
+    expect(h.try({ type: "task:complete", playerId: crew[0]!, stationId: "reactor-a", taskId: long.id }).error?.code).toBe("WRONG_STATION");
+    h.do({ type: "task:complete", playerId: crew[0]!, stationId: first[0], taskId: long.id });
+    expect(tasksOf(h, crew[0]!)[1]).toMatchObject({ step: 1, done: false });
+    h.do({ type: "task:complete", playerId: crew[0]!, stationId: second[0], taskId: long.id });
+    expect(tasksOf(h, crew[0]!)[1]).toMatchObject({ step: 2, done: true });
+    expect(h.try({ type: "task:complete", playerId: crew[0]!, stationId: second[0], taskId: long.id }).state).toBe(h.state);
+    expect(h.try({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t9" }).error?.code).toBe("BAD_REQUEST");
+  });
+
+  it("freezes tasks during meetings unless disabled, and lets ghosts go on but not bodies", () => {
+    const { h, crew } = playing(7);
+    h.kill(crew[0]!);
+    expect(h.try({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" }).error?.code).toBe("NOT_ALLOWED");
+    h.do({ type: "player:reportBody", playerId: crew[1]!, bodyOfId: crew[0]! });
+    expect(h.try({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" }).error?.message).toMatch(/gelées/);
+    for (let i = 0; i < 4; i++) h.do({ type: "admin:advancePhase" });
+    h.seconds(60);
+    h.do({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" }); // a ghost does tasks
+
+    const open = playing(7, { freezeTasksDuringMeeting: false }).h;
+    open.do({ type: "admin:callMeeting" });
+    const someone = Object.keys(open.state.players)[0]!;
+    open.do({ type: "task:complete", playerId: someone, stationId: "card", taskId: "t1" });
+  });
+
+  it("shows the task bar always, during meetings only, or never", () => {
+    const { h, crew } = playing(7, { taskBarUpdates: "meetings", resumeCountdownSeconds: 5 });
+    h.do({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" });
+    const total = crew.length * 5;
+    expect(tvView(h.state, "http://x").taskBar).toEqual({ done: 0, total });
+    expect(adminView(h.state, "http://x", "http://x/e").taskProgress).toEqual({ done: 1, total });
+    h.do({ type: "admin:callMeeting" });
+    expect(tvView(h.state, "http://x").taskBar).toEqual({ done: 1, total });
+    for (let i = 0; i < 3; i++) h.do({ type: "admin:advancePhase" });
+    h.seconds(5);
+    h.do({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" });
+    expect(tvView(h.state, "http://x").taskBar).toEqual({ done: 1, total });
+
+    const never = playing(7, { taskBarUpdates: "never" }).h;
+    expect(tvView(never.state, "http://x").taskBar).toBeUndefined();
+    never.do({ type: "admin:endGame", winner: "crew" });
+    expect(tvView(never.state, "http://x").taskBar).toEqual({ done: 0, total: 25 });
+  });
+
+  it("turns the double key when two players turn A and B within 5 s", () => {
+    const { h, impostors, crew } = playing(7, { enabledTasks: ["doubleKey"], commonTasks: 0, longTasks: 0, shortTasks: 1 });
+    h.do({ type: "task:keyTurn", playerId: crew[0]!, stationId: "key-a" });
+    h.do({ type: "task:keyTurn", playerId: crew[0]!, stationId: "key-b" }); // one player cannot turn both
+    expect(tasksOf(h, crew[0]!)[0]!.done).toBe(false);
+    h.seconds(6);
+    h.do({ type: "task:keyTurn", playerId: crew[1]!, stationId: "key-a" }); // too late for crew[0]'s turn
+    expect(tasksOf(h, crew[1]!)[0]!.done).toBe(false);
+    h.seconds(4);
+    h.do({ type: "task:keyTurn", playerId: impostors[0]!, stationId: "key-b" }); // an impostor may help
+    expect(tasksOf(h, crew[1]!)[0]!.done).toBe(true);
+    expect(tasksOf(h, impostors[0]!)[0]!.done).toBe(true);
+    expect(tvView(h.state, "http://x").coop).toMatchObject({ keyTurns: {}, keyMatchAt: h.now });
+    expect(h.try({ type: "task:keyTurn", playerId: crew[2]!, stationId: "card" }).error?.code).toBe("WRONG_STATION");
+  });
+
+  it("charges the shield while three players hold it together for 10 s", () => {
+    const { h, crew } = playing(7, { enabledTasks: ["shield"], commonTasks: 0, longTasks: 0, shortTasks: 1 });
+    const hold = (id: string, holding = true) => h.do({ type: "station:hold", playerId: id, stationId: "shield", holding });
+    hold(crew[0]!);
+    hold(crew[1]!);
+    expect(h.state.shieldChargeStartedAt).toBeUndefined();
+    hold(crew[2]!);
+    expect(h.state.shieldChargeStartedAt).toBe(h.now);
+    // Heartbeats keep the fingers on; one finger off resets the charge.
+    h.seconds(3);
+    for (const id of crew.slice(0, 3)) hold(id);
+    hold(crew[2]!, false);
+    expect(h.state.shieldChargeStartedAt).toBeUndefined();
+    hold(crew[2]!);
+    const started = h.now;
+    for (let t = 0; t < 10; t += 2) {
+      h.seconds(2);
+      if (h.state.shieldDoneAt === undefined) for (const id of crew.slice(0, 3)) hold(id);
+    }
+    expect(h.state.shieldDoneAt).toBe(started + 10_000);
+    expect(crew.slice(0, 3).map((id) => tasksOf(h, id)[0]!.done)).toEqual([true, true, true]);
+    expect(tasksOf(h, crew[3]!)[0]!.done).toBe(false);
+    expect(timersFromState(h.state).map((t) => t.id)).not.toContain("shield");
+  });
+
+  it("gives the crew the win when every crew task is done", () => {
+    const { h, crew, impostors } = playing(5, { enabledTasks: ["wires", "safe"], commonTasks: 0, longTasks: 0, shortTasks: 2 });
+    for (const id of crew) for (const t of tasksOf(h, id)) if (!(id === crew[0] && t.id === "t2")) finish(h, id, t.id);
+    expect(h.state.phase).toBe("PLAYING");
+    for (const t of tasksOf(h, impostors[0]!)) finish(h, impostors[0]!, t.id); // fake tasks change nothing
+    expect(h.state.phase).toBe("PLAYING");
+    h.do({ type: "admin:completeTask", playerId: crew[0]!, taskId: "t2" });
+    expect(h.state.phase).toBe("GAME_OVER");
+    expect(h.state.winner).toBe("crew");
+    expect(playerView(h.state, crew[1]!).gameOver?.reason).toBe("tasks");
+  });
+
+  it("clears the tasks when going back to the lobby", () => {
+    const { h } = playing(6);
+    h.do({ type: "admin:backToLobby" });
+    expect(Object.values(h.state.players).every((p) => p.tasks === undefined)).toBe(true);
+    const v = playerView(h.state, "p1");
+    expect(v.kind === "player" && v.tasks).toBeUndefined();
   });
 });

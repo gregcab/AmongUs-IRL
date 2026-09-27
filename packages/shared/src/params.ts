@@ -1,4 +1,5 @@
 import { SABOTAGE_KINDS, type SabotageKind } from "./stations";
+import { TASK_TYPES, type TaskBarUpdates, type TaskType } from "./tasks";
 import type { GhostMeetingMode } from "./types";
 
 export interface GameParams {
@@ -17,8 +18,15 @@ export interface GameParams {
   ghostMeetingMode: GhostMeetingMode;
   confirmEjects: boolean;
   anonymousVotes: boolean;
-  /** Reserved for tasks (out of MVP scope). */
+  /** No task progress while a meeting runs. */
   freezeTasksDuringMeeting: boolean;
+  enabledTasks: TaskType[];
+  /** Tasks drawn per player in each category (capped by the enabled tasks). */
+  commonTasks: number;
+  longTasks: number;
+  shortTasks: number;
+  /** When the task bar shown to players and on the TV moves. */
+  taskBarUpdates: TaskBarUpdates;
   /** Countdown of the critical sabotages (reactor, oxygen). */
   sabotageCriticalSeconds: number;
   /** Cooldown shared by the impostors, restarted after each sabotage and each meeting. */
@@ -43,6 +51,11 @@ export const DEFAULT_PARAMS: GameParams = {
   confirmEjects: true,
   anonymousVotes: false,
   freezeTasksDuringMeeting: true,
+  enabledTasks: [...TASK_TYPES],
+  commonTasks: 1,
+  longTasks: 1,
+  shortTasks: 3,
+  taskBarUpdates: "always",
   sabotageCriticalSeconds: 60,
   sabotageCooldownSeconds: 90,
   enabledSabotages: [...SABOTAGE_KINDS],
@@ -64,6 +77,9 @@ export const PARAM_BOUNDS: Record<NumericKey, [min: number, max: number]> = {
   discussionSeconds: [10, 900],
   votingSeconds: [10, 600],
   resumeCountdownSeconds: [3, 120],
+  commonTasks: [0, 3],
+  longTasks: [0, 3],
+  shortTasks: [0, 8],
   sabotageCriticalSeconds: [15, 600],
   sabotageCooldownSeconds: [5, 900],
 };
@@ -121,6 +137,16 @@ export function validateParams(base: GameParams, update: unknown): ParamsValidat
         else errors.push("enabledSabotages doit être une liste de sabotages connus");
         break;
       }
+      case "enabledTasks": {
+        const list = subsetOf(TASK_TYPES, value);
+        if (list) next.enabledTasks = list;
+        else errors.push("enabledTasks doit être une liste de tâches connues");
+        break;
+      }
+      case "taskBarUpdates":
+        if (value === "always" || value === "meetings" || value === "never") next.taskBarUpdates = value;
+        else errors.push('taskBarUpdates doit valoir "always", "meetings" ou "never"');
+        break;
     }
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, params: next };

@@ -72,6 +72,10 @@ export interface ClientToServerPayloads {
   "station:code": { at: StationAccess; code: string };
   /** Lights switch flipped at the electrical station. */
   "station:switch": { at: StationAccess; index: number };
+  /** Current step of a task done at this station (mini-game won on the phone). */
+  "task:complete": { at: StationAccess; taskId: string };
+  /** Double key turned at a key station. */
+  "task:keyTurn": { at: StationAccess };
 
   "admin:auth": { pin: string };
   "admin:updateParams": { params: Partial<GameParams> };
@@ -86,6 +90,8 @@ export interface ClientToServerPayloads {
   "admin:backToLobby": Record<string, never>;
   "admin:updateStation": { stationId: StationId; name: string; location: string };
   "admin:repairSabotage": Record<string, never>;
+  /** Manual validation of a task when something went wrong at a station. */
+  "admin:completeTask": { playerId: string; taskId: string };
 }
 
 /** How a station command proves where the player is: the QR token, or the code printed under it. */
@@ -116,6 +122,7 @@ export const ADMIN_EVENTS = [
   "admin:backToLobby",
   "admin:updateStation",
   "admin:repairSabotage",
+  "admin:completeTask",
 ] as const satisfies readonly ClientEventName[];
 
 /** Ack payloads that carry data. */

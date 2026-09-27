@@ -30,6 +30,18 @@ import {
   stationSwitch,
 } from "./sabotage";
 import { isAlive, nameKey, normalizeName, phaseKey, playersInOrder, stationLabel } from "./state";
+import {
+  adminCompleteTask,
+  clearTasks,
+  completeTask,
+  crewProgress,
+  drawTasks,
+  keyTurn,
+  resetCoop,
+  shieldCharged,
+  shieldHold,
+  updateShield,
+} from "./tasks";
 import { timersFromState } from "./timers";
 import type { Command, ReduceResult, Rng } from "./types";
 import { gameOverInfo, publicResult } from "./views";
@@ -73,11 +85,15 @@ function handle(c: Ctx, cmd: Command): Outcome {
     case "station:open":
       return openStation(c, cmd.playerId, cmd.stationId);
     case "station:hold":
-      return stationHold(c, cmd.playerId, cmd.stationId, cmd.holding);
+      return cmd.stationId === "shield" ? afterTask(c, shieldHold(c, cmd.playerId, cmd.holding)) : stationHold(c, cmd.playerId, cmd.stationId, cmd.holding);
     case "station:code":
       return stationCode(c, cmd.playerId, cmd.stationId, cmd.code);
     case "station:switch":
       return stationSwitch(c, cmd.playerId, cmd.stationId, cmd.index);
+    case "task:complete":
+      return afterTask(c, completeTask(c, cmd.playerId, cmd.stationId, cmd.taskId));
+    case "task:keyTurn":
+      return afterTask(c, keyTurn(c, cmd.playerId, cmd.stationId));
     case "admin:updateParams":
       return updateParams(c, cmd.params);
     case "admin:kick":
@@ -102,6 +118,8 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return updateStation(c, cmd.stationId, cmd.name, cmd.location);
     case "admin:repairSabotage":
       return adminRepair(c);
+    case "admin:completeTask":
+      return afterTask(c, adminCompleteTask(c, cmd.playerId, cmd.taskId));
     case "tick:phaseEnd":
       return cmd.key === phaseKey(c.s) ? advance(c) : "noop";
     case "tick:deathEffective":
@@ -110,9 +128,20 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return killReady(c, cmd.at);
     case "tick:sabotageDeadline":
       return sabotageDeadline(c, cmd.at);
-    case "tick:holdExpired":
-      return holdExpired(c, cmd.stationId, cmd.playerId, cmd.until);
+    case "tick:holdExpired": {
+      const outcome = holdExpired(c, cmd.stationId, cmd.playerId, cmd.until);
+      if (!outcome && cmd.stationId === "shield") updateShield(c);
+      return outcome;
+    }
+    case "tick:shieldCharged":
+      return afterTask(c, shieldCharged(c, cmd.at));
   }
+}
+
+/** Finished tasks may complete the crew's task bar. */
+function afterTask(c: Ctx, outcome: Outcome): Outcome {
+  if (!outcome) checkWin(c);
+  return outcome;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +316,7 @@ function start(c: Ctx, force: boolean): Outcome {
   s.winner = undefined;
   s.winReason = undefined;
   clearSabotage(s);
+  drawTasks(c);
 
   for (const p of players) {
     const allies =
@@ -361,6 +391,7 @@ function resumePlaying(c: Ctx): void {
   s.meeting = undefined;
   s.phase = "PLAYING";
   s.phaseEndsAt = undefined;
+  s.taskBarSnapshot = crewProgress(s);
   c.log("Reprise du jeu");
   startCooldowns(c);
   restartSabotageCooldown(c);
@@ -509,6 +540,8 @@ function startMeeting(c: Ctx, type: MeetingType, reporterId?: string, bodyOfId?:
   s.killReadyNotified = false;
   if (s.sabotage) c.log("Sabotage annulé par la réunion");
   clearSabotage(s);
+  resetCoop(s);
+  s.taskBarSnapshot = crewProgress(s);
 
   const meeting = {
     id: c.rng.id(),
@@ -644,9 +677,13 @@ function aliveCounts(s: GameState): { impostors: number; crew: number } {
   return { impostors, crew };
 }
 
-/** Evaluated in order; a "all tasks done" condition will plug in here. */
+/** Evaluated in order. */
 const WIN_CONDITIONS: WinCondition[] = [
   (s) => (aliveCounts(s).impostors === 0 ? { winner: "crew", reason: "impostorsOut" } : null),
+  (s) => {
+    const { done, total } = crewProgress(s);
+    return total > 0 && done >= total ? { winner: "crew", reason: "tasks" } : null;
+  },
   (s) => {
     const { impostors, crew } = aliveCounts(s);
     return impostors >= crew ? { winner: "impostors", reason: "parity" } : null;
@@ -686,6 +723,7 @@ function endGame(c: Ctx, winner: Team, reason: WinReason): void {
   s.killReadyNotified = false;
   s.emergencyCooldownEndsAt = undefined;
   clearSabotage(s);
+  resetCoop(s);
   c.log(`Victoire ${winner === "crew" ? "des équipiers" : "des imposteurs"}`);
   emitPhase(c);
   c.emit(ALL, "game:over", gameOverInfo(s)!);
@@ -726,6 +764,7 @@ function backToLobby(c: Ctx): Outcome {
   s.killReadyNotified = false;
   s.emergencyCooldownEndsAt = undefined;
   clearSabotage(s);
+  clearTasks(s);
   c.log(aborted ? "Partie annulée par le MJ, retour au lobby" : "Retour au lobby");
   emitPhase(c);
   emitLobby(c);
