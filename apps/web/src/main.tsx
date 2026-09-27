@@ -9,6 +9,16 @@ function route() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const scan = /^\/(r|e)\/([^/]+)$/.exec(path);
   if (scan) return <ScanPage type={scan[1] === "r" ? "report" : "emergency"} token={decodeURIComponent(scan[2]!)} />;
+  if (path.startsWith("/s/")) {
+    return (
+      <div className="screen center">
+        <div className="big">Les tâches arrivent bientôt.</div>
+        <a className="btn secondary" href="/">
+          Retour au jeu
+        </a>
+      </div>
+    );
+  }
   if (path === "/tv") return <TvApp />;
   if (path === "/admin") return <AdminApp />;
   return <PlayerApp />;

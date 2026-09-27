@@ -5,7 +5,9 @@ import { meetingReason } from "../lib/game";
 import { getSession, setSession } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { ConnectionBanner, useToast } from "../lib/ui";
+import { useNow } from "../lib/clock";
 import { vibrate, VIBRATION } from "../lib/vibration";
+import { armDeviceFeatures, needsGesture } from "../lib/wakeLock";
 import { BodyScreen, GameOverScreen, GhostScreen, JoinScreen, LobbyScreen, PlayingScreen, RoleRevealScreen } from "./screens";
 import { MeetingScreen } from "./meeting";
 
@@ -58,6 +60,11 @@ export function PlayerApp() {
   const { view, connected, send: rawSend } = useGameConnection(() => ({ sessionToken: getSession() ?? undefined }), onEvent);
   viewRef.current = view && (view.kind === "player" || view.kind === "anonymous") ? view : null;
 
+  const armed = view?.kind === "player" && (view.me.ready || view.phase !== "LOBBY");
+  useEffect(() => {
+    if (armed) armDeviceFeatures();
+  }, [armed]);
+
   useEffect(() => {
     if (!alarm) return;
     const t = setTimeout(() => setAlarm(null), 5000);
@@ -102,6 +109,7 @@ export function PlayerApp() {
   return (
     <>
       <ConnectionBanner connected={connected} />
+      {armed && <GestureBanner />}
       {content}
       {alarm && (
         <div className="alarm" onClick={() => setAlarm(null)}>
@@ -130,4 +138,11 @@ function PlayerScreens({ view, send, bodyQr }: { view: PlayerView; send: Send; b
     case "GAME_OVER":
       return <GameOverScreen view={view} />;
   }
+}
+
+/** Shown after a reload: sound and the keep-awake lock need one tap to come back. */
+function GestureBanner() {
+  useNow(1000);
+  if (!needsGesture()) return null;
+  return <div className="offline">Touchez l'écran pour réactiver le son et l'écran allumé</div>;
 }

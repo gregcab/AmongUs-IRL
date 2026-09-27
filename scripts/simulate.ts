@@ -101,7 +101,10 @@ async function runScenario(): Promise<void> {
   if (initial.phase === "GAME_OVER") await admin.ok("admin:backToLobby");
   else if (initial.phase !== "LOBBY") throw new Error(`La partie est en cours (${initial.phase}) : terminez-la depuis /admin`);
 
-  const bots = await joinBots(initial);
+  // Offline players left over from a previous game would never act: remove them.
+  const lobby = await admin.until((v) => v.phase === "LOBBY");
+  for (const p of lobby.players.filter((p) => !p.connected)) await admin.ok("admin:kick", { playerId: p.id });
+  const bots = await joinBots(await admin.until((v) => v.players.every((p) => p.connected)));
   const byId = new Map(bots.map((b) => [b.id, b]));
   await admin.ok("admin:updateParams", { params: { minPlayers: Math.min(4, bots.length) } });
   await admin.ok("admin:start", { force: true });
@@ -133,15 +136,20 @@ async function runScenario(): Promise<void> {
     const victim = pick(victims);
     log(`Tour ${round} : ${victim.name} est touché et déclare sa mort`);
     await victim.c.ok("player:declareDeath");
-    await victim.c.until((v) => v.kind === "player" && (v.me.status === "BODY" || v.phase !== "PLAYING"), 60_000);
-    if (admin.view?.phase === "GAME_OVER") break;
+    const after = await victim.c.until((v) => v.kind === "player" && (v.me.status === "BODY" || v.phase !== "PLAYING"), 60_000);
+    if (after.phase === "GAME_OVER") break;
 
     const qr = await victim.c.event("body:qr", 10_000);
     victim.c.events.length = 0;
     const reporters = bots.filter((b) => b !== victim && status(b) === "ALIVE");
-    const reporter = pick(reporters);
-    const res = await post("/api/report", reporter.token, { token: qr.token });
-    log(`${reporter.name} scanne le corps : ${res.ok ? "réunion !" : res.error?.message}`);
+    if (reporters.length === 0) {
+      log("Aucun bot vivant pour signaler : le MJ signale le corps");
+      await admin.ok("admin:callMeeting", { bodyOfId: victim.id });
+    } else {
+      const reporter = pick(reporters);
+      const res = await post("/api/report", reporter.token, { token: qr.token });
+      log(`${reporter.name} scanne le corps : ${res.ok ? "réunion !" : res.error?.message}`);
+    }
 
     // Push the meeting forward when humans are slow.
     const meeting = await admin.until((v) => v.phase !== "PLAYING", 10_000);
@@ -165,6 +173,6 @@ async function runScenario(): Promise<void> {
 (passive ? runPassive() : runScenario())
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
+    console.error(err instanceof Error ? err.stack : err);
     process.exit(1);
   });

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "dev": "pnpm -r --parallel --filter './apps/*' dev",
     "build": "pnpm -r build",
     "start": "node apps/server/dist/index.js",
     "test": "vitest run",

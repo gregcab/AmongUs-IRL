@@ -61,6 +61,12 @@ export interface LogEntry {
   text: string;
 }
 
+/** Reserved for tasks (out of MVP scope): a physical spot with a QR code at `/s/:token`. */
+export interface Station {
+  id: string;
+  name: string;
+}
+
 export interface GameState {
   gameId: string;
   phase: Phase;

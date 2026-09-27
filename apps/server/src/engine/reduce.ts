@@ -589,20 +589,39 @@ function resolveVote(c: Ctx): void {
 // End of game
 // ---------------------------------------------------------------------------
 
-/** Ends the game if a team has won. Returns true when the game is over. */
-function checkWin(c: Ctx): boolean {
-  if (c.s.phase !== "PLAYING" && c.s.phase !== "MEETING") return false;
+type WinCondition = (s: GameState) => Team | null;
+
+function aliveCounts(s: GameState): { impostors: number; crew: number } {
   let impostors = 0;
   let crew = 0;
-  for (const p of Object.values(c.s.players)) {
+  for (const p of Object.values(s.players)) {
     if (!isAlive(p)) continue;
     if (p.role === "impostor") impostors++;
     else crew++;
   }
-  if (impostors === 0) endGame(c, "crew");
-  else if (impostors >= crew) endGame(c, "impostors");
-  else return false;
-  return true;
+  return { impostors, crew };
+}
+
+/** Evaluated in order; a "all tasks done" condition will plug in here. */
+const WIN_CONDITIONS: WinCondition[] = [
+  (s) => (aliveCounts(s).impostors === 0 ? "crew" : null),
+  (s) => {
+    const { impostors, crew } = aliveCounts(s);
+    return impostors >= crew ? "impostors" : null;
+  },
+];
+
+/** Ends the game if a team has won. Returns true when the game is over. */
+function checkWin(c: Ctx): boolean {
+  if (c.s.phase !== "PLAYING" && c.s.phase !== "MEETING") return false;
+  for (const condition of WIN_CONDITIONS) {
+    const winner = condition(c.s);
+    if (winner) {
+      endGame(c, winner);
+      return true;
+    }
+  }
+  return false;
 }
 
 function endGame(c: Ctx, winner: Team): void {
