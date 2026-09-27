@@ -422,6 +422,9 @@ describe("victory", () => {
     const info = playerView(h.state, impostors[0]!).gameOver;
     expect(info?.roles.find((r) => r.id === impostors[0])?.role).toBe("impostor");
     expect(info?.timeline).toEqual([{ at: h.now, playerId: impostors[0], kind: "ejection" }]);
+    expect(info?.meetings).toEqual([
+      { type: "admin", reporterId: undefined, bodyOfId: undefined, calledAt: h.now, ejectedId: impostors[0], tally: h.state.meetingHistory[0]!.votes },
+    ]);
   });
 
   it("gives impostors the win after ejecting a crewmate at parity", () => {

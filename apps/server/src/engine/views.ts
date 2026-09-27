@@ -59,6 +59,14 @@ export function gameOverInfo(s: GameState): GameOverInfo | undefined {
     winner: s.winner,
     roles: playersInOrder(s).map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role ?? "crew" })),
     timeline: s.timeline.map((t) => ({ ...t })),
+    meetings: s.meetingHistory.map((m) => ({
+      type: m.type,
+      reporterId: m.reporterId,
+      bodyOfId: m.bodyOfId,
+      calledAt: m.calledAt,
+      ejectedId: m.result?.ejectedId,
+      tally: m.result && !s.params.anonymousVotes ? { ...m.votes } : undefined,
+    })),
   };
 }
 

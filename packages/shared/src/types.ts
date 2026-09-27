@@ -123,10 +123,22 @@ export interface PublicMeetingResult {
   tally?: Record<string, VoteChoice>;
 }
 
+export interface MeetingSummary {
+  type: MeetingType;
+  reporterId?: string;
+  bodyOfId?: string;
+  calledAt: number;
+  /** `undefined` when the game ended before the vote. */
+  ejectedId?: string | null;
+  /** Who voted for whom; omitted when votes are anonymous. */
+  tally?: Record<string, VoteChoice>;
+}
+
 export interface GameOverInfo {
   winner: Team;
   roles: { id: string; name: string; color: string; role: Role }[];
   timeline: TimelineEntry[];
+  meetings: MeetingSummary[];
 }
 
 export interface Ally {

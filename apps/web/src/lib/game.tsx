@@ -167,6 +167,7 @@ export function GameOverBlock({ info, large }: { info: GameOverInfo; large?: boo
             ))}
           </ul>
         </div>
+        {!large && info.meetings.length > 0 && <MeetingHistory info={info} />}
         {info.timeline.length > 0 && (
           <div className="panel stack">
             <span className="eyebrow">Chronologie</span>
@@ -187,6 +188,32 @@ export function GameOverBlock({ info, large }: { info: GameOverInfo; large?: boo
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MeetingHistory({ info }: { info: GameOverInfo }) {
+  const people: PublicPlayer[] = info.roles.map((r) => ({ ...r, ready: true, connected: true, dead: false, ejected: false }));
+  return (
+    <div className="panel stack">
+      <span className="eyebrow">Réunions</span>
+      {info.meetings.map((m, i) => {
+        const ejected = m.ejectedId ? playerById(people, m.ejectedId) : undefined;
+        return (
+          <div key={i} className="stack" style={{ gap: 6 }}>
+            <div className="row spread">
+              <strong>
+                {i + 1}. {meetingReason(m, people)}
+              </strong>
+              <span className="muted countdown small">{formatClock(m.calledAt)}</span>
+            </div>
+            <span className="muted small">
+              {m.ejectedId === undefined ? "Partie terminée avant le vote" : ejected ? `${ejected.name} éjecté` : "Personne éjecté"}
+            </span>
+            {m.tally && <Tally tally={m.tally} players={people} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
