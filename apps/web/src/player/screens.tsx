@@ -116,7 +116,13 @@ export function LobbyScreen({ view, send }: { view: PlayerView; send: Send }) {
           {view.players.map((p) => (
             <li key={p.id}>
               <PlayerChip player={p} />
-              {p.ready ? <span className="pill-ok">✓</span> : <span className="muted small">en attente</span>}
+              {!p.connected ? (
+                <span className="offline-tag">hors ligne</span>
+              ) : p.ready ? (
+                <span className="pill-ok">✓</span>
+              ) : (
+                <span className="muted small">en attente</span>
+              )}
             </li>
           ))}
         </ul>

@@ -650,7 +650,8 @@ function adminEndGame(c: Ctx, winner: Team): Outcome {
 
 function backToLobby(c: Ctx): Outcome {
   const s = c.s;
-  if (s.phase !== "GAME_OVER") return fail("WRONG_PHASE", "La partie n'est pas terminée");
+  if (s.phase === "LOBBY") return fail("WRONG_PHASE", "Déjà dans le lobby");
+  const aborted = s.phase !== "GAME_OVER";
   s.gameId = c.rng.id();
   s.phase = "LOBBY";
   for (const p of Object.values(s.players)) {
@@ -671,7 +672,7 @@ function backToLobby(c: Ctx): Outcome {
   s.killCooldownEndsAt = undefined;
   s.killReadyNotified = false;
   s.emergencyCooldownEndsAt = undefined;
-  c.log("Retour au lobby");
+  c.log(aborted ? "Partie annulée par le MJ, retour au lobby" : "Retour au lobby");
   emitPhase(c);
   emitLobby(c);
 }

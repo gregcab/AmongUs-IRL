@@ -461,6 +461,18 @@ describe("admin", () => {
     expect(Object.values(h.state.players).every((p) => !p.ready && p.role === undefined && p.status === "ALIVE")).toBe(true);
   });
 
+  it("aborts a running game back to the lobby, cancelling every timer", () => {
+    const h = new Harness(FAST);
+    const { crew } = h.startGame(6);
+    h.do({ type: "player:declareDeath", playerId: crew[0]! });
+    expect(timersFromState(h.state).length).toBeGreaterThan(0);
+    h.do({ type: "admin:backToLobby" });
+    expect(h.state.phase).toBe("LOBBY");
+    expect(timersFromState(h.state)).toEqual([]);
+    expect(h.state.log.at(-1)?.text).toMatch(/annulée/);
+    expect(h.try({ type: "admin:backToLobby" }).error?.code).toBe("WRONG_PHASE");
+  });
+
   it("removes a player killed by the admin during a meeting from the vote", () => {
     const h = new Harness(FAST);
     const { crew } = h.startGame(7);

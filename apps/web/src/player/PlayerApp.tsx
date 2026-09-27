@@ -1,7 +1,7 @@
-import type { AnonymousView, PlayerView, ServerToClientPayloads } from "@among-us/shared";
+import type { AnonymousView, PlayerView, PublicMeeting, ServerToClientPayloads } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playAlarm, playVictory } from "../lib/audio";
-import { AlarmOverlay, type AlarmInfo } from "../lib/game";
+import { AlarmOverlay, ResultBlock, type AlarmInfo } from "../lib/game";
 import { getSession, setSession } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { ConnectionBanner, useToast } from "../lib/ui";
@@ -23,6 +23,8 @@ export function PlayerApp() {
   const [toast, showToast] = useToast();
   const [bodyQr, setBodyQr] = useState<ServerToClientPayloads["body:qr"] | null>(null);
   const [alarm, setAlarm] = useState<AlarmInfo | null>(null);
+  /** Keeps the vote result on screen for a moment when that vote ends the game. */
+  const [lingeringResult, setLingeringResult] = useState<PublicMeeting | null>(null);
   const viewRef = useRef<PlayerView | AnonymousView | null>(null);
 
   const onEvent = useCallback(
@@ -48,6 +50,11 @@ export function PlayerApp() {
           setAlarm(m);
           break;
         }
+        case "meeting:result": {
+          const meeting = viewRef.current?.meeting;
+          if (meeting) setLingeringResult({ ...meeting, subPhase: "RESULT", result: payload as ServerToClientPayloads["meeting:result"] });
+          break;
+        }
         case "game:over":
           playVictory();
           break;
@@ -63,6 +70,12 @@ export function PlayerApp() {
   useEffect(() => {
     if (armed) armDeviceFeatures();
   }, [armed]);
+
+  useEffect(() => {
+    if (!lingeringResult) return;
+    const t = setTimeout(() => setLingeringResult(null), 7000);
+    return () => clearTimeout(t);
+  }, [lingeringResult]);
 
   useEffect(() => {
     if (!alarm) return;
@@ -100,7 +113,15 @@ export function PlayerApp() {
         </div>
       );
   } else if (view.kind === "player") {
-    content = <PlayerScreens view={view} send={send} bodyQr={bodyQr} />;
+    content =
+      view.phase === "GAME_OVER" && lingeringResult?.result ? (
+        <div className="screen center">
+          <ResultBlock meeting={lingeringResult} players={view.players} />
+          <p className="muted center">Fin de la partie…</p>
+        </div>
+      ) : (
+        <PlayerScreens view={view} send={send} bodyQr={bodyQr} />
+      );
   } else {
     content = null;
   }

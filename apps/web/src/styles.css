@@ -459,6 +459,14 @@ a {
   padding: 8px 12px;
 }
 
+.offline-tag {
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--warn);
+}
+
 .check {
   color: var(--ok);
   font-weight: 700;

@@ -30,7 +30,13 @@ function Roster({ view, meeting, showArrivals, showVotes }: { view: PlayerView; 
         return (
           <li key={p.id}>
             <PlayerChip player={p} strike={p.dead} />
-            {p.dead ? <span className="muted small">mort</span> : mark ? <span className="check">✓</span> : null}
+            {p.dead ? (
+              <span className="muted small">mort</span>
+            ) : mark ? (
+              <span className="check">✓</span>
+            ) : !p.connected ? (
+              <span className="offline-tag">hors ligne</span>
+            ) : null}
           </li>
         );
       })}

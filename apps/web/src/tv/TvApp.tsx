@@ -145,6 +145,7 @@ function PlayerGrid({ players, mark, strike }: { players: PublicPlayer[]; mark?:
             <span className="tv-name">{p.name}</span>
             {marked && <span className="pill-ok">✓</span>}
             {dead && <span className="tv-dead-tag">mort</span>}
+            {!dead && !p.connected && <span className="tv-offline-tag">hors ligne</span>}
           </li>
         );
       })}

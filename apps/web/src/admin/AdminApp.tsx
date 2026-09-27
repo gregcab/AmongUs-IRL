@@ -230,6 +230,14 @@ function Actions({
           ))}
         </div>
       )}
+      {(view.phase === "ROLE_REVEAL" || view.phase === "PLAYING" || view.phase === "MEETING") && (
+        <button
+          className="btn secondary small-btn"
+          onClick={() => confirmThen("Annuler la partie en cours et revenir au lobby ? Les rôles seront perdus.", "admin:backToLobby")}
+        >
+          Annuler la partie
+        </button>
+      )}
       {view.phase === "GAME_OVER" && (
         <button className="btn" onClick={() => send("admin:backToLobby")}>
           Retour au lobby (rejouer)
