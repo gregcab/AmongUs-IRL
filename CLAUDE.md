@@ -44,7 +44,7 @@ Every state change goes through `GameRuntime.dispatch(command)` (`apps/server/sr
 3. Timers are **derived from state** (`engine/timers.ts: timersFromState`), not tracked separately: `Scheduler.sync` holds exactly that set (keyed by id, rescheduled when the deadline or command changes). Tick commands carry a key/deadline and are ignored when stale. This is why restart recovery is just "load snapshot + sync timers".
 4. `Transport.onResult` (`transport/socket.ts`) recomputes group rooms, routes engine events, then sends each socket a per-client filtered `state:sync` view **only if its JSON changed** — so a crewmate receives nothing when someone secretly dies.
 
-Things outside the engine because they need secrets or wall-clock: HMAC tokens (`tokens.ts`), rotating body QR pushes (1 s interval in `Transport`), admin PIN rate limiting (`auth.ts`). QR scans arrive via REST (`transport/rest.ts`), which verifies the token and then dispatches `player:reportBody` / `player:emergency`.
+Things outside the engine because they need secrets or wall-clock: HMAC tokens (`tokens.ts`), rotating body QR pushes (1 s interval in `Transport`), admin PIN rate limiting (`auth.ts`). QR scans arrive via REST (`transport/rest.ts`), which verifies the token and then dispatches `player:reportBody` / `player:emergency`. A body can also be reported by typing its rotating 4-digit code (`player:reportCode` socket event, handled in `Transport.onReportCode` with a per-player lockout against brute force) — needed because the phone camera may open a browser without the session.
 
 ### Information-hiding rules (anti-cheat)
 
@@ -54,7 +54,7 @@ Things outside the engine because they need secrets or wall-clock: HMAC tokens (
 
 ### State machines (SPEC §5)
 
-`LOBBY → ROLE_REVEAL → PLAYING ⇄ MEETING(GATHERING → DISCUSSION → VOTING → RESULT) → GAME_OVER → LOBBY`. Player status `ALIVE → DYING → BODY → GHOST` (or `ALIVE → GHOST` on ejection). `DYING` counts as alive for win conditions. Starting a meeting finalizes all `DYING` and turns every `BODY` into `GHOST`. Win conditions are an ordered list in `reduce.ts` (`WIN_CONDITIONS`) so a tasks condition can plug in later.
+`LOBBY → ROLE_REVEAL → PLAYING ⇄ MEETING(GATHERING → DISCUSSION → VOTING → RESULT) → GAME_OVER → LOBBY`. `admin:backToLobby` also aborts a running game from any phase. Player status `ALIVE → DYING → BODY → GHOST` (or `ALIVE → GHOST` on ejection). `DYING` counts as alive for win conditions. Starting a meeting finalizes all `DYING` and turns every `BODY` into `GHOST`. Win conditions are an ordered list in `reduce.ts` (`WIN_CONDITIONS`) so a tasks condition can plug in later.
 
 ### Web client
 

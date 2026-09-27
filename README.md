@@ -96,16 +96,18 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 
 - **Tuer** : l'imposteur pose deux doigts sur l'épaule de la victime en chuchotant « tu es mort ». Il ne touche jamais son téléphone à ce moment-là.
 - **Mourir** : la victime maintient **Je suis mort** 1,5 s. Après un court délai, son téléphone affiche un QR code : c'est son corps. Elle reste sur place, écran visible, sans parler.
-- **Signaler** : un joueur vivant scanne le corps avec l'**appareil photo** de son téléphone. Il faut ouvrir le lien dans le navigateur qui a servi à rejoindre la partie.
+- **Signaler** : un joueur vivant scanne le corps avec l'**appareil photo** de son téléphone. Il faut ouvrir le lien dans le navigateur qui a servi à rejoindre la partie. Si l'appareil photo ouvre un autre navigateur, le joueur touche **Signaler un corps avec son code** dans le jeu et tape les 4 chiffres affichés sous le QR du corps (le code change avec le QR ; 5 erreurs bloquent 30 s).
 - **Réunion d'urgence** : scanner le QR code imprimé de la station.
 - **Fantômes** : ils ne parlent jamais aux vivants.
 
 ### Conseils
 
 - Luminosité au maximum et verrouillage automatique désactivé sur tous les téléphones.
+- Rejoignez la partie avec le navigateur par défaut du téléphone (Safari sur iPhone) : c'est lui qu'ouvre l'appareil photo. N'ajoutez pas le jeu à l'écran d'accueil, la session n'y serait pas partagée.
 - Sur iPhone, la vibration n'existe pas dans le navigateur : l'écran affiche toujours un signal visuel.
 - Si un téléphone s'éteint ou se recharge, il suffit de rouvrir la page : la session est conservée. Un bandeau demande de toucher l'écran pour réactiver le son et l'écran allumé.
-- En cas de problème, le MJ peut tout rattraper depuis la console : signaler un corps à la place d'un joueur, tuer ou réanimer, passer à la phase suivante, terminer la partie.
+- En cas de problème, le MJ peut tout rattraper depuis la console : signaler un corps à la place d'un joueur, tuer ou réanimer, passer à la phase suivante, terminer la partie ou l'annuler pour revenir au lobby.
+- Les joueurs hors ligne sont signalés sur la TV et dans les listes : un téléphone éteint bloque le rassemblement jusqu'au délai maximum, le MJ peut passer à la suite.
 
 ## Développement
 
@@ -130,6 +132,8 @@ pnpm simulate --players 4 --passive    # des bots attendent ; vous pilotez depui
 - Ajoutez `?dev=1` à l'URL joueur pour ouvrir plusieurs joueurs dans les onglets d'un même navigateur.
 - `TIME_SCALE=0.2` accélère toutes les durées (développement uniquement).
 - `pnpm screenshots` régénère les captures de ce README. Il faut d'abord lancer `pnpm build`, et Google Chrome doit être installé.
+
+La CI GitHub (`.github/workflows/ci.yml`) vérifie les types, les tests, le build, et construit l'image Docker pour amd64 et arm64 (Raspberry Pi).
 
 L'architecture (moteur de jeu pur, minuteurs dérivés de l'état, vues filtrées par client) est décrite dans [CLAUDE.md](CLAUDE.md).
 
