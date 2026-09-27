@@ -10,9 +10,10 @@ export async function createHttp(config: Config): Promise<FastifyInstance> {
   app.get("/api/health", async () => ({ ok: true }));
 
   if (existsSync(config.webDist)) {
-    await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
+    await app.register(fastifyStatic, { root: config.webDist });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === "GET" && !req.url.startsWith("/api/") && !req.url.startsWith("/socket.io")) {
+      const isAsset = req.url.startsWith("/assets/");
+      if (req.method === "GET" && !isAsset && !req.url.startsWith("/api/") && !req.url.startsWith("/socket.io")) {
         return reply.type("text/html").sendFile("index.html");
       }
       return reply.code(404).send({ ok: false, error: { code: "BAD_REQUEST", message: "Introuvable" } });
