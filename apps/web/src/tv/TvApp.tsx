@@ -185,7 +185,7 @@ function Meeting({ view, meeting }: { view: TvView; meeting: PublicMeeting }) {
         <div className="tv-result">
           <ResultBlock meeting={meeting} players={view.players} large />
           <div className="title center">
-            Dispersez-vous : reprise dans <Countdown endsAt={meeting.endsAt} /> s
+            Dispersez-vous : reprise dans <Countdown endsAt={meeting.endsAt} unit />
           </div>
         </div>
       )}

@@ -25,10 +25,16 @@ export function PlayerChip({
   );
 }
 
-export function Countdown({ endsAt, className }: { endsAt?: number; className?: string }) {
+export function Countdown({ endsAt, className, unit }: { endsAt?: number; className?: string; unit?: boolean }) {
   const now = useNow();
   if (endsAt === undefined) return null;
-  return <span className={className ?? "countdown"}>{formatSeconds(secondsLeft(endsAt, now))}</span>;
+  const left = secondsLeft(endsAt, now);
+  return (
+    <span className={className ?? "countdown"}>
+      {formatSeconds(left)}
+      {unit && left < 60 ? " s" : ""}
+    </span>
+  );
 }
 
 function capture(el: Element, pointerId: number): void {

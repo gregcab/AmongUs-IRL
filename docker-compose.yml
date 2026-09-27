@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    image: among-us-irl
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      PORT: 8080
+      # URL encoded in every QR code: the server's address on the party Wi-Fi.
+      PUBLIC_URL: ${PUBLIC_URL:?Définissez PUBLIC_URL dans .env (ex. http://192.168.1.10:8080)}
+      ADMIN_PIN: ${ADMIN_PIN:?Définissez ADMIN_PIN dans .env}

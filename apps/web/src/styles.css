@@ -982,7 +982,7 @@ a {
     transform: translateX(-60vw) rotate(0deg);
   }
   to {
-    transform: translateX(-50%) rotate(540deg);
+    transform: translateX(-50%) rotate(720deg);
   }
 }
 

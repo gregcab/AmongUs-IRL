@@ -114,6 +114,17 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
           <Actions view={view} send={send} confirmThen={confirmThen} />
         </section>
 
+        <section className="panel stack">
+          <h3>Journal</h3>
+          <ul className="admin-log">
+            {[...s.log].reverse().map((entry, i) => (
+              <li key={s.log.length - i}>
+                <span className="muted">{formatClock(entry.at)}</span> {entry.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="panel stack admin-wide">
           <PlayersTable view={view} send={send} confirmThen={confirmThen} />
         </section>
@@ -137,16 +148,6 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
           </section>
         )}
 
-        <section className="panel stack">
-          <h3>Journal</h3>
-          <ul className="admin-log">
-            {[...s.log].reverse().map((entry, i) => (
-              <li key={s.log.length - i}>
-                <span className="muted">{formatClock(entry.at)}</span> {entry.text}
-              </li>
-            ))}
-          </ul>
-        </section>
       </div>
     </div>
   );

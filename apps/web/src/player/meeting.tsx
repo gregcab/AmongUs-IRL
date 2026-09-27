@@ -148,7 +148,7 @@ function Result({ view, meeting }: { view: PlayerView; meeting: PublicMeeting })
       <div className="panel center">
         <div className="title">Dispersez-vous</div>
         <p className="muted">
-          Reprise dans <Countdown endsAt={meeting.endsAt} /> s
+          Reprise dans <Countdown endsAt={meeting.endsAt} unit />
         </p>
       </div>
     </>
@@ -168,7 +168,7 @@ function GhostMeeting({ view, meeting }: { view: PlayerView; meeting: PublicMeet
         <>
           <ResultBlock meeting={meeting} players={view.players} />
           <p className="muted center">
-            Reprise dans <Countdown endsAt={meeting.endsAt} /> s
+            Reprise dans <Countdown endsAt={meeting.endsAt} unit />
           </p>
         </>
       ) : (
