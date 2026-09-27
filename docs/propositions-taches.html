@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tâches IRL</title>
+<meta name="description" content="Propositions de tâches physiques et sur téléphone pour Among Us IRL, pour 10 joueurs et plus.">
+<style>
+  :root {
+    --bg: #060814;
+    --bg-2: #0c1024;
+    --panel: rgba(18, 24, 46, 0.82);
+    --line: rgba(130, 160, 255, 0.18);
+    --line-strong: rgba(130, 160, 255, 0.34);
+    --text: #f2f5ff;
+    --muted: #9aa5c6;
+    --accent: #3b9dff;
+    --crew: #6fb6ff;
+    --impostor: #ff4a55;
+    --ok: #2fd08a;
+    --warn: #ffb020;
+    --short: #2fd08a;
+    --long: #b18cff;
+    --common: #ffb020;
+    --visual: #38e2dd;
+    --coop: #ff7eb6;
+    --font: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.5;
+    background:
+      radial-gradient(ellipse 80% 50% at 90% -10%, rgba(88, 60, 200, 0.3), transparent 60%),
+      radial-gradient(ellipse 70% 50% at -10% 110%, rgba(20, 120, 200, 0.22), transparent 60%),
+      linear-gradient(180deg, var(--bg-2), var(--bg));
+    background-attachment: fixed;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.7;
+    background-image:
+      radial-gradient(1px 1px at 20px 30px, #fff, transparent),
+      radial-gradient(1px 1px at 90px 120px, rgba(255,255,255,.8), transparent),
+      radial-gradient(1.5px 1.5px at 160px 60px, #cfe0ff, transparent),
+      radial-gradient(1px 1px at 230px 180px, rgba(255,255,255,.7), transparent),
+      radial-gradient(2px 2px at 280px 20px, #fff, transparent);
+    background-size: 300px 240px;
+  }
+  main { position: relative; max-width: 1100px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1, h2, h3 { line-height: 1.15; margin: 0 0 0.5em; }
+  h1 { font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: -0.01em; }
+  h2 { font-size: 1.6rem; margin-top: 2.2em; }
+  h3 { font-size: 1.15rem; }
+  p { margin: 0.5em 0; }
+  .muted { color: var(--muted); }
+  .eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .hero { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .hero svg { flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.4)); }
+  .lead { font-size: 1.15rem; color: #d6ddf5; max-width: 62ch; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; backdrop-filter: blur(8px); }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat b { font-size: 2rem; line-height: 1; }
+  ul.clean { margin: 0; padding-left: 1.1em; }
+  ul.clean li { margin: 0.3em 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+    border: 1px solid currentColor; background: rgba(255,255,255,0.03); white-space: nowrap;
+  }
+  .t-short { color: var(--short); }
+  .t-long { color: var(--long); }
+  .t-common { color: var(--common); }
+  .t-visual { color: var(--visual); }
+  .t-coop { color: var(--coop); }
+  .t-phone { color: var(--accent); }
+  .t-phys { color: #ffd27a; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 18px; }
+  .filters button {
+    font: inherit; font-weight: 700; font-size: 0.9rem; color: var(--text);
+    background: rgba(40, 52, 92, 0.7); border: 1px solid var(--line-strong);
+    padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  }
+  .filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+
+  .task { display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .task header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .task .num { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
+  .task .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .task dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 0.93rem; }
+  .task dt { color: var(--muted); font-weight: 700; }
+  .task dd { margin: 0; }
+  .task .imp { font-size: 0.9rem; border-left: 3px solid var(--impostor); padding-left: 10px; color: #ffd0d3; }
+  .task .effort { font-size: 0.82rem; color: var(--muted); }
+  .dots { letter-spacing: 2px; color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .table-wrap { overflow-x: auto; }
+
+  .map { width: 100%; height: auto; display: block; }
+  .note { border-left: 3px solid var(--warn); padding-left: 12px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.9rem; }
+  @media (max-width: 520px) { .task dl { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<section class="hero">
+  <svg width="84" height="101" viewBox="0 0 100 120" aria-hidden="true">
+    <g stroke="#0a0c14" stroke-width="6" stroke-linejoin="round">
+      <rect x="7" y="40" width="24" height="46" rx="10" fill="#a07a10"/>
+      <path d="M28 40 Q28 6 57 6 Q86 6 86 40 L86 102 Q86 114 74 114 L68 114 Q61 114 61 106 L61 98 L53 98 L53 106 Q53 114 45 114 L40 114 Q28 114 28 102 Z" fill="#f6d743"/>
+      <rect x="46" y="24" width="48" height="28" rx="14" fill="#8fd0ea"/>
+      <rect x="58" y="29" width="22" height="7" rx="3.5" fill="#fff" stroke="none" opacity=".85"/>
+    </g>
+  </svg>
+  <div>
+    <span class="eyebrow">Among Us IRL · conception des tâches</span>
+    <h1>Propositions de tâches</h1>
+    <p class="lead">Un catalogue de 18 tâches pour une partie à <b>10 joueurs ou plus</b>, pensées pour le système de stations à QR code déjà réservé dans l'application (<code>/s/:token</code>). Chaque tâche indique sa durée, son matériel, sa validation et ce qu'elle apporte aux imposteurs.</p>
+  </div>
+</section>
+
+<h2>Comment les tâches s'intègrent au jeu</h2>
+<div class="grid g2">
+  <div class="panel">
+    <h3>Le principe</h3>
+    <ul class="clean">
+      <li>Chaque tâche vit à une <b>station</b> : un lieu physique avec un QR code imprimé.</li>
+      <li>Le joueur scanne la station avec l'appareil photo ; son téléphone affiche la tâche (mini-jeu, consigne physique ou code à saisir).</li>
+      <li>Une <b>barre de progression collective</b> s'affiche sur la TV. À 100 %, les équipiers gagnent.</li>
+      <li>Les fantômes continuent leurs tâches (à partir de la réunion qui suit leur mort).</li>
+      <li>Toutes les tâches sont gelées pendant les réunions (<code>freezeTasksDuringMeeting</code>).</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>Les imposteurs</h3>
+    <ul class="clean">
+      <li>Ils reçoivent une fausse liste de tâches, <b>identique en apparence</b> : même écran, mêmes durées.</li>
+      <li>Leur validation n'a aucun effet sur la barre. Ils peuvent donc « faire semblant » devant témoins.</li>
+      <li>Les tâches longues ou isolées sont leurs meilleures occasions de tuer.</li>
+      <li>Seules les <span class="tag t-visual">visuelles</span> trahissent un imposteur : à doser (1 ou 2 max).</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Dosage pour 10 à 15 joueurs</h2>
+<div class="grid g3">
+  <div class="panel stat"><span class="eyebrow">Stations</span><b>10 à 12</b><span class="muted">Réparties sur 4 à 6 zones, dont 2 isolées.</span></div>
+  <div class="panel stat"><span class="eyebrow">Tâches par joueur</span><b>5</b><span class="muted">1 commune, 1 longue, 3 courtes.</span></div>
+  <div class="panel stat"><span class="eyebrow">Durée visée</span><b>12 à 18 min</b><span class="muted">Pour finir toutes les tâches sans kill ni réunion.</span></div>
+</div>
+<div class="panel" style="margin-top:14px">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Joueurs</th><th>Imposteurs</th><th>Stations</th><th>Tâches / joueur</th><th>Total équipiers</th><th>Remarque</th></tr></thead>
+    <tbody>
+      <tr><td>10</td><td>2</td><td>10</td><td>5</td><td>40</td><td>Configuration de référence.</td></tr>
+      <tr><td>12</td><td>3</td><td>11</td><td>5</td><td>45</td><td>Ajouter une tâche coopérative.</td></tr>
+      <tr><td>15</td><td>3</td><td>12</td><td>4 à 5</td><td>48 à 60</td><td>Doubler les stations les plus demandées pour éviter les files d'attente.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note muted" style="margin-top:12px">Règle pratique : pas plus de <b>3 joueurs</b> en même temps sur une même station. Au-delà, dupliquer la station (même tâche, deux QR codes).</p>
+</div>
+
+<h2>Catalogue</h2>
+<div class="legend">
+  <span class="tag t-short">Courte · 15 à 45 s</span>
+  <span class="tag t-long">Longue · 2 étapes ou plus</span>
+  <span class="tag t-common">Commune · tout le monde l'a</span>
+  <span class="tag t-visual">Visuelle · prouve l'innocence</span>
+  <span class="tag t-coop">Coopérative · 2 joueurs ou plus</span>
+  <span class="tag t-phone">Sur le téléphone</span>
+  <span class="tag t-phys">Physique</span>
+</div>
+<div class="filters" role="group" aria-label="Filtrer les tâches">
+  <button type="button" data-filter="all" aria-pressed="true">Toutes</button>
+  <button type="button" data-filter="phone" aria-pressed="false">Téléphone</button>
+  <button type="button" data-filter="phys" aria-pressed="false">Physiques</button>
+  <button type="button" data-filter="long" aria-pressed="false">Longues</button>
+  <button type="button" data-filter="coop" aria-pressed="false">Coopératives</button>
+  <button type="button" data-filter="visual" aria-pressed="false">Visuelles</button>
+</div>
+
+<div class="grid g2" id="tasks"></div>
+
+<h2>Exemple d'implantation dans une maison avec jardin</h2>
+<div class="panel">
+  <svg class="map" viewBox="0 0 900 420" role="img" aria-label="Plan d'exemple : 11 stations réparties entre le salon, la cuisine, l'entrée, le couloir, une chambre, le garage et le jardin">
+    <defs>
+      <style>
+        .room { fill: rgba(30, 40, 72, 0.7); stroke: rgba(130,160,255,.45); stroke-width: 2; }
+        .garden { fill: rgba(30, 90, 60, 0.35); stroke: rgba(47,208,138,.5); stroke-width: 2; stroke-dasharray: 8 6; }
+        .lbl { fill: #c9d3f2; font: 700 15px system-ui, sans-serif; }
+        .st { stroke: #0a0c14; stroke-width: 3; }
+        .stn { fill: #0a0c14; font: 800 13px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
+        .gather { fill: none; stroke: #ffb020; stroke-width: 3; stroke-dasharray: 5 5; }
+      </style>
+    </defs>
+    <rect class="garden" x="560" y="20" width="320" height="380" rx="18"/>
+    <text class="lbl" x="580" y="48">Jardin</text>
+    <rect class="room" x="20" y="20" width="300" height="200" rx="10"/>
+    <text class="lbl" x="36" y="46">Salon (rassemblement)</text>
+    <rect class="room" x="330" y="20" width="210" height="140" rx="10"/>
+    <text class="lbl" x="346" y="46">Cuisine</text>
+    <rect class="room" x="330" y="170" width="210" height="50" rx="10"/>
+    <text class="lbl" x="346" y="200">Couloir</text>
+    <rect class="room" x="20" y="230" width="180" height="170" rx="10"/>
+    <text class="lbl" x="36" y="256">Entrée</text>
+    <rect class="room" x="210" y="230" width="160" height="170" rx="10"/>
+    <text class="lbl" x="226" y="256">Chambre</text>
+    <rect class="room" x="380" y="230" width="160" height="170" rx="10"/>
+    <text class="lbl" x="396" y="256">Garage</text>
+    <circle class="gather" cx="170" cy="130" r="54"/>
+    <g>
+      <circle class="st" cx="80" cy="170" r="17" fill="#ffb020"/><text class="stn" x="80" y="170">U</text>
+      <circle class="st" cx="400" cy="100" r="17" fill="#2fd08a"/><text class="stn" x="400" y="100">1</text>
+      <circle class="st" cx="480" cy="110" r="17" fill="#b18cff"/><text class="stn" x="480" y="110">2</text>
+      <circle class="st" cx="480" cy="195" r="17" fill="#2fd08a"/><text class="stn" x="480" y="195">3</text>
+      <circle class="st" cx="100" cy="320" r="17" fill="#ffb020"/><text class="stn" x="100" y="320">4</text>
+      <circle class="st" cx="290" cy="330" r="17" fill="#38e2dd"/><text class="stn" x="290" y="330">5</text>
+      <circle class="st" cx="460" cy="330" r="17" fill="#b18cff"/><text class="stn" x="460" y="330">6</text>
+      <circle class="st" cx="640" cy="110" r="17" fill="#2fd08a"/><text class="stn" x="640" y="110">7</text>
+      <circle class="st" cx="800" cy="90" r="17" fill="#ff7eb6"/><text class="stn" x="800" y="90">8</text>
+      <circle class="st" cx="690" cy="280" r="17" fill="#2fd08a"/><text class="stn" x="690" y="280">9</text>
+      <circle class="st" cx="830" cy="350" r="17" fill="#b18cff"/><text class="stn" x="830" y="350">10</text>
+      <circle class="st" cx="260" cy="100" r="17" fill="#ff7eb6"/><text class="stn" x="260" y="100">11</text>
+    </g>
+  </svg>
+  <p class="muted">U : station d'urgence (déjà gérée par l'application). Pastille orange pointillée : point de rassemblement. Les couleurs reprennent la légende du catalogue. Le garage (6) et le fond du jardin (10) sont les zones isolées : placez-y des tâches longues, les imposteurs y trouveront leurs occasions.</p>
+</div>
+
+<h2>Ce que ça demande dans l'application</h2>
+<div class="grid g2">
+  <div class="panel">
+    <h3>Déjà prévu (points d'extension)</h3>
+    <ul class="clean">
+      <li>Entité <code>Station</code> et préfixe d'URL <code>/s/:token</code> réservés.</li>
+      <li>Emplacement <code>tasks</code> dans la vue joueur (<code>state:sync</code>).</li>
+      <li>Liste <code>WIN_CONDITIONS</code> où brancher « toutes les tâches terminées ».</li>
+      <li>Paramètre <code>freezeTasksDuringMeeting</code>.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>À construire</h3>
+    <ul class="clean">
+      <li>Attribution des tâches au lancement (tirage côté serveur, fausses listes pour les imposteurs).</li>
+      <li>Jetons de station signés (HMAC, comme la station d'urgence), régénérés à chaque partie, et page imprimable par station.</li>
+      <li>Un composant par type de mini-jeu, avec une durée identique pour équipiers et imposteurs.</li>
+      <li>Barre de progression sur la TV et dans la console MJ ; bouton MJ « valider une tâche » en secours.</li>
+      <li>Pour les tâches physiques : un second QR « de fin » caché, révélé seulement quand la tâche est faite.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Questions à trancher</h2>
+<div class="panel">
+  <ul class="clean">
+    <li>Autorise-t-on les tâches <b>visuelles</b> ? Elles accélèrent la déduction mais peuvent rendre la partie trop facile à 10.</li>
+    <li>La barre de progression est-elle visible en continu sur la TV, ou seulement pendant les réunions (plus de tension) ?</li>
+    <li>Les imposteurs ont-ils des <b>sabotages</b> (hors MVP) pour compenser des tâches trop rapides ?</li>
+    <li>Tâches physiques : combien de matériel est-on prêt à préparer ? Le catalogue propose une variante « téléphone seul » pour chacune.</li>
+  </ul>
+</div>
+
+<footer>Document de conception pour Among Us IRL. Référence du jeu : SPEC.md, § 15 « Points d'extension pour les tâches ».</footer>
+</main>
+
+<script>
+const TASKS = [
+  { name: "Brancher les câbles", kinds: ["short", "phone"], time: "15 s", gear: "Aucun", how: "Relier 4 fils de couleur à leur prise en glissant le doigt.", check: "Mini-jeu sur le téléphone.", imp: "Tâche rapide : peu d'occasions, mais bon alibi.", effort: 2 },
+  { name: "Code du coffre", kinds: ["short", "phone"], time: "20 s", gear: "Aucun", how: "Mémoriser 5 chiffres affichés 3 secondes, puis les retaper.", check: "Mini-jeu ; nouveau code à chaque essai.", imp: "Faire semblant d'échouer permet de rester sur place.", effort: 1 },
+  { name: "Calibrer le distributeur", kinds: ["short", "phone"], time: "20 s", gear: "Aucun", how: "Arrêter trois jauges qui tournent dans la zone verte.", check: "Mini-jeu sur le téléphone.", imp: "—", effort: 1 },
+  { name: "Réacteur (Simon)", kinds: ["short", "phone"], time: "30 à 45 s", gear: "Aucun", how: "Reproduire une séquence de couleurs qui s'allonge jusqu'à 5.", check: "Mini-jeu ; une erreur recommence la séquence.", imp: "Durée variable : pratique pour attendre une victime.", effort: 2 },
+  { name: "Télécharger puis envoyer les données", kinds: ["long", "phone"], time: "2 × 20 s + trajet", gear: "Aucun", how: "Télécharger à la station A (jauge de 20 s, téléphone déverrouillé), puis envoyer à la station B, à l'autre bout du terrain.", check: "Le serveur exige A avant B.", imp: "Le trajet entre A et B traverse une zone isolée : idéal pour tuer.", effort: 2 },
+  { name: "Remplir le moteur", kinds: ["long", "phone"], time: "2 × 10 s + trajet", gear: "Un bidon décoratif (facultatif)", how: "Maintenir le doigt 10 s pour remplir le bidon au garage, puis 10 s pour vider au moteur (jardin).", check: "Appui maintenu ; relâcher remet la jauge à zéro.", imp: "Deux zones isolées : tâche très exposée.", effort: 1 },
+  { name: "Carte d'accès", kinds: ["common", "phone"], time: "10 à 20 s", gear: "Aucun", how: "Glisser une carte à la bonne vitesse : ni trop vite, ni trop lent.", check: "Mini-jeu ; commune à tous les joueurs.", imp: "Tout le monde passe par là : repérer qui prétend l'avoir faite.", effort: 1 },
+  { name: "Scanner médical", kinds: ["visual", "short", "phys"], time: "10 s", gear: "Un tapis ou un cercle au sol", how: "Rester immobile sur le tapis, téléphone levé : l'écran affiche un grand scan vert animé.", check: "Seuls les équipiers obtiennent l'animation verte ; un imposteur voit « scanner occupé ».", imp: "Un imposteur ne peut pas la faire devant témoins.", effort: 1 },
+  { name: "Vider les poubelles", kinds: ["visual", "long", "phys"], time: "30 s", gear: "Un sac, un bac dehors", how: "Porter un sac de l'intérieur jusqu'au bac du jardin, puis scanner le QR du bac.", check: "Scan intérieur puis scan du bac ; le sac porté est visible par tous.", imp: "Les imposteurs peuvent porter le sac, mais la barre ne bouge pas : à combiner avec une barre visible.", effort: 1 },
+  { name: "Puzzle de la carte stellaire", kinds: ["short", "phys"], time: "45 s à 1 min", gear: "Puzzle de 9 à 12 grosses pièces", how: "Assembler le puzzle ; le QR « de fin » est imprimé au dos du plateau, visible seulement une fois le puzzle terminé et retourné.", check: "QR de fin (un QR d'entrée démarre la tâche).", imp: "Les imposteurs doivent vraiment manipuler les pièces pour paraître crédibles.", effort: 2 },
+  { name: "Pyramide de gobelets", kinds: ["short", "phys"], time: "30 s", gear: "10 gobelets", how: "Monter une pyramide de 10 gobelets, puis la défaire pour le suivant. Le QR de fin est sous le gobelet du sommet.", check: "QR de fin.", imp: "Bruyant : attire les regards, mauvais endroit pour tuer.", effort: 1 },
+  { name: "Tri des échantillons", kinds: ["short", "phys"], time: "40 s", gear: "12 objets de 3 couleurs, 3 boîtes", how: "Ranger les objets par couleur ; le QR de fin est au fond de la dernière boîte vide.", check: "QR de fin.", imp: "Occupe les mains et le regard de la victime.", effort: 2 },
+  { name: "Tir de précision", kinds: ["short", "phys"], time: "30 s", gear: "3 balles, un seau à 2 m", how: "Mettre 2 balles sur 3 dans le seau. Le QR de fin est au fond du seau.", check: "QR de fin.", imp: "Plein air, visible de loin : bon pour prouver sa présence.", effort: 1 },
+  { name: "Arroser la plante", kinds: ["short", "phys"], time: "20 s", gear: "Deux pichets, une plante", how: "Transvaser l'eau d'un pichet à l'autre sans renverser, puis scanner.", check: "Scan après action (validation sur l'honneur, contrôlable par le MJ).", imp: "—", effort: 1 },
+  { name: "Aligner l'antenne", kinds: ["short", "phone"], time: "20 s", gear: "Aucun", how: "Tourner le téléphone (gyroscope) pour aligner une flèche sur la cible. Variante sans capteur : glisser un curseur.", check: "Mini-jeu.", imp: "Le joueur regarde son écran en tournant sur lui-même : vulnérable.", effort: 3 },
+  { name: "Double clé", kinds: ["coop", "phone"], time: "10 s", gear: "Deux stations éloignées", how: "Deux joueurs scannent les stations A et B à moins de 5 s d'intervalle (coordination à la voix).", check: "Le serveur compare les horodatages.", imp: "Oblige à faire confiance à un inconnu : un imposteur peut « aider ».", effort: 2 },
+  { name: "Bouclier du vaisseau", kinds: ["coop", "phone"], time: "15 s", gear: "Aucun", how: "Trois joueurs à la même station maintiennent le doigt sur leur écran en même temps pendant 10 s.", check: "Le serveur vérifie les trois appuis simultanés.", imp: "Rassemble 3 personnes : zone sûre, donc les imposteurs y vont pour l'alibi.", effort: 3 },
+  { name: "Code du générateur", kinds: ["long", "phys"], time: "1 min + trajet", gear: "4 cartes cachées", how: "Trouver 4 cartes chiffrées cachées dans une pièce, puis taper le code à la station du générateur.", check: "Code différent à chaque partie (cartes réimprimées par le MJ).", imp: "Fouiller une pièce en silence : occasion parfaite.", effort: 2 },
+];
+
+const LABEL = { short: ["Courte", "t-short"], long: ["Longue", "t-long"], common: ["Commune", "t-common"], visual: ["Visuelle", "t-visual"], coop: ["Coopérative", "t-coop"], phone: ["Téléphone", "t-phone"], phys: ["Physique", "t-phys"] };
+const container = document.getElementById("tasks");
+
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+function render(filter) {
+  container.innerHTML = TASKS.map((t, i) => {
+    if (filter !== "all" && !t.kinds.includes(filter)) return "";
+    const tags = t.kinds.map((k) => `<span class="tag ${LABEL[k][1]}">${LABEL[k][0]}</span>`).join("");
+    return `<article class="panel task">
+      <header><div><div class="num">Tâche ${String(i + 1).padStart(2, "0")}</div><h3>${esc(t.name)}</h3></div></header>
+      <div class="tags">${tags}</div>
+      <dl>
+        <dt>Durée</dt><dd>${esc(t.time)}</dd>
+        <dt>Matériel</dt><dd>${esc(t.gear)}</dd>
+        <dt>Déroulé</dt><dd>${esc(t.how)}</dd>
+        <dt>Validation</dt><dd>${esc(t.check)}</dd>
+      </dl>
+      ${t.imp !== "—" ? `<div class="imp"><b>Imposteurs :</b> ${esc(t.imp)}</div>` : ""}
+      <div class="effort">Effort de développement : <span class="dots">${"●".repeat(t.effort)}${"○".repeat(3 - t.effort)}</span></div>
+    </article>`;
+  }).join("");
+}
+
+document.querySelectorAll(".filters button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".filters button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render(b.dataset.filter);
+}));
+render("all");
+</script>
+</body>
+</html>
