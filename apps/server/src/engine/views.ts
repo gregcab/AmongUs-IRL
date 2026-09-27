@@ -24,6 +24,7 @@ export function publicPlayers(s: GameState): PublicPlayer[] {
     connected: p.connected,
     dead: p.status === "GHOST",
     ejected: p.ejected,
+    scanOk: p.scanOk === true,
   }));
 }
 
@@ -121,8 +122,10 @@ export function anonymousView(s: GameState): AnonymousView {
   return { kind: "anonymous", ...baseView(s) };
 }
 
-export function tvView(s: GameState, joinUrl: string): TvView {
-  return { kind: "tv", ...baseView(s), joinUrl };
+export function tvView(s: GameState, joinUrl: string, practiceUrl?: string): TvView {
+  const view: TvView = { kind: "tv", ...baseView(s), joinUrl };
+  if (s.phase === "LOBBY" && practiceUrl) view.practiceUrl = practiceUrl;
+  return view;
 }
 
 export function adminView(s: GameState, joinUrl: string, emergencyUrl: string): AdminView {

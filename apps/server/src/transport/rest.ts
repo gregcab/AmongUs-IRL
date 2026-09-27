@@ -77,6 +77,17 @@ export function registerRest(app: FastifyInstance, opts: RestOptions): void {
     }),
   );
 
+  app.post(
+    "/api/practice",
+    scanRoute((playerId, body) => {
+      const decoded = tokens.verifyPractice(tokenOf(body));
+      if (!decoded || decoded.gameId !== runtime.state.gameId) {
+        return { code: "INVALID_TOKEN", message: "QR d'essai périmé : scannez celui affiché sur la TV" };
+      }
+      return { type: "player:practiceScan", playerId };
+    }),
+  );
+
   app.get("/api/print/emergency", async (req, reply) => {
     if (!tokens.verifyAdmin(parseCookies(req.headers.cookie)[ADMIN_COOKIE], opts.adminPin)) {
       return reply.code(401).type("text/html").send("<p>Accès réservé au maître du jeu.</p>");

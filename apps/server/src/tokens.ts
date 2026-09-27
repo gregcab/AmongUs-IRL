@@ -81,6 +81,17 @@ export class Tokens {
     return { gameId: parts[1]! };
   }
 
+  /** Lobby scan practice QR shown on the TV, bound to the game. */
+  practiceToken(gameId: string): string {
+    return this.seal(`P|${gameId}`);
+  }
+
+  verifyPractice(token: unknown): { gameId: string } | null {
+    const parts = this.open(token)?.split("|");
+    if (!parts || parts.length !== 2 || parts[0] !== "P") return null;
+    return { gameId: parts[1]! };
+  }
+
   /** Stateless admin session: survives restarts, invalidated by a PIN change. */
   adminToken(pin: string): string {
     return this.sign(`A|${pin}`);

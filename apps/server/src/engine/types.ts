@@ -30,6 +30,8 @@ export type Command =
   | PlayerCommand<"player:reportBody", { bodyOfId: string }>
   /** Emergency station QR scanned; token already checked by the transport layer. */
   | PlayerCommand<"player:emergency">
+  /** Lobby practice QR scanned from a browser holding the player's session. */
+  | PlayerCommand<"player:practiceScan">
   | PlayerCommand<"system:connection", { connected: boolean }>
   // Admin
   | { type: "admin:updateParams"; params: Partial<GameParams> }

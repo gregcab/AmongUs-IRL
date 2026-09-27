@@ -281,7 +281,10 @@ function PlayersTable({
                   <th>Urgences</th>
                 </>
               ) : (
-                <th>Prêt</th>
+                <>
+                  <th>Prêt</th>
+                  <th>Scan</th>
+                </>
               )}
               <th>Connexion</th>
               <th />
@@ -306,7 +309,10 @@ function PlayersTable({
                     </td>
                   </>
                 ) : (
-                  <td>{p.ready ? <span className="check">✓</span> : "—"}</td>
+                  <>
+                    <td>{p.ready ? <span className="check">✓</span> : "—"}</td>
+                    <td>{p.scanOk ? <span className="check">scan OK ✓</span> : <span className="muted">—</span>}</td>
+                  </>
                 )}
                 <td>{p.connected ? <span className="check">en ligne</span> : <span className="muted">hors ligne</span>}</td>
                 <td className="actions">

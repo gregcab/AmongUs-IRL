@@ -206,6 +206,25 @@ describe("server integration", () => {
     expect(ps[1]!.c.events.find((e) => e.name === "meeting:called")?.payload).toMatchObject({ type: "emergency", reporterId: ps[0]!.id });
   });
 
+  it("checks the lobby scan practice from the TV's QR code", async () => {
+    const [p0, p1] = await players(2);
+    const tv = await client({ tv: true });
+    const tvView = await tv.until((v) => v.kind === "tv" && v.practiceUrl !== undefined);
+    const practiceToken = tvView.kind === "tv" ? tvView.practiceUrl!.split("/t/")[1]! : "";
+    expect(tvView.kind === "tv" && tvView.practiceUrl).toBe(`http://game.test/t/${practiceToken}`);
+
+    const noSession = await post("/api/practice", { token: practiceToken });
+    expect(noSession.status).toBe(401);
+    expect(noSession.body.error?.message).toMatch(/navigateur avec lequel vous avez rejoint/);
+    const oldGame = await post("/api/practice", { token: app.tokens.practiceToken("old-game") }, { [SESSION_HEADER]: p0!.token });
+    expect(oldGame.status).toBe(400);
+    expect(await post("/api/practice", { token: practiceToken }, { cookie: `amongus_session=${p0!.token}` })).toEqual({ status: 200, body: { ok: true } });
+
+    await tv.until((v) => v.players.find((p) => p.id === p0!.id)?.scanOk === true);
+    const mine = asPlayer(await p1!.c.until((v) => v.players.some((p) => p.scanOk)));
+    expect(mine.players.map((p) => p.scanOk)).toEqual([true, false]);
+  });
+
   it("serves the printable emergency page to the admin only", async () => {
     expect((await fetch(`${url}/api/print/emergency`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/emergency`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });

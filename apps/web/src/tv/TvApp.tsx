@@ -124,25 +124,52 @@ function Lobby({ view }: { view: TvView }) {
             {ready} / {view.players.length} prêts
           </div>
         </div>
-        <PlayerGrid players={view.players} mark={(p) => p.ready} />
+        <PlayerGrid players={view.players} mark={(p) => p.ready} scanTags compact={view.players.length > 8} />
         {view.players.length < view.params.minPlayers && (
           <p className="tv-sub">Encore {view.params.minPlayers - view.players.length} joueur(s) minimum</p>
+        )}
+        {view.practiceUrl && (
+          <div className="tv-practice">
+            <div className="tv-practice-qr">
+              <QrCode value={view.practiceUrl} size={320} />
+            </div>
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="eyebrow">Entraînement au scan</span>
+              <div className="tv-practice-title">Une fois inscrit, scannez ce QR avec l'appareil photo</div>
+              <p className="tv-sub" style={{ fontSize: "1.25rem" }}>
+                « scan ✓ » : votre téléphone ouvre bien le jeu. Pendant la partie, c'est ainsi qu'on signale un corps.
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function PlayerGrid({ players, mark, strike }: { players: PublicPlayer[]; mark?: (p: PublicPlayer) => boolean; strike?: boolean }) {
+function PlayerGrid({
+  players,
+  mark,
+  strike,
+  scanTags,
+  compact,
+}: {
+  players: PublicPlayer[];
+  mark?: (p: PublicPlayer) => boolean;
+  strike?: boolean;
+  scanTags?: boolean;
+  compact?: boolean;
+}) {
   return (
-    <ul className="tv-grid">
+    <ul className={`tv-grid${compact ? " compact" : ""}`}>
       {players.map((p) => {
         const dead = strike && p.dead;
         const marked = mark?.(p);
         return (
           <li key={p.id} className={`${dead ? "dead" : ""}${marked ? " marked" : ""}`}>
-            <Crewmate color={p.color} size={52} variant={dead ? "ghost" : "alive"} />
+            <Crewmate color={p.color} size={compact ? 40 : 52} variant={dead ? "ghost" : "alive"} />
             <span className="tv-name">{p.name}</span>
+            {scanTags && p.scanOk && <span className="tv-scan-tag">scan ✓</span>}
             {marked && <span className="pill-ok">✓</span>}
             {dead && <span className="tv-dead-tag">mort</span>}
             {!dead && !p.connected && <span className="tv-offline-tag">hors ligne</span>}

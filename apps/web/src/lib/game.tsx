@@ -217,7 +217,7 @@ export function GameOverBlock({ info, large }: { info: GameOverInfo; large?: boo
 }
 
 function MeetingHistory({ info }: { info: GameOverInfo }) {
-  const people: PublicPlayer[] = info.roles.map((r) => ({ ...r, ready: true, connected: true, dead: false, ejected: false }));
+  const people: PublicPlayer[] = info.roles.map((r) => ({ ...r, ready: true, connected: true, dead: false, ejected: false, scanOk: false }));
   return (
     <div className="panel stack">
       <span className="eyebrow">Réunions</span>

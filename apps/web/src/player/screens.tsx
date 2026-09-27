@@ -103,11 +103,14 @@ export function LobbyScreen({ view, send }: { view: PlayerView; send: Send }) {
           <p className="muted small center">Active le son, la vibration et garde l'écran allumé.</p>
         </>
       ) : (
-        <div className="panel stack">
-          <span className="eyebrow">Consignes</span>
-          <RulesList />
-          {vibrationChecked === false && <p className="muted small">Pas de vibration sur ce téléphone : surveille l'écran.</p>}
-        </div>
+        <>
+          <ScanPractice ok={view.players.find((p) => p.id === me.id)?.scanOk ?? false} />
+          <div className="panel stack">
+            <span className="eyebrow">Consignes</span>
+            <RulesList />
+            {vibrationChecked === false && <p className="muted small">Pas de vibration sur ce téléphone : surveille l'écran.</p>}
+          </div>
+        </>
       )}
 
       <div className="panel stack">
@@ -116,18 +119,44 @@ export function LobbyScreen({ view, send }: { view: PlayerView; send: Send }) {
           {view.players.map((p) => (
             <li key={p.id}>
               <PlayerChip player={p} />
-              {!p.connected ? (
-                <span className="offline-tag">hors ligne</span>
-              ) : p.ready ? (
-                <span className="pill-ok">✓</span>
-              ) : (
-                <span className="muted small">en attente</span>
-              )}
+              <span className="row" style={{ gap: 8 }}>
+                {p.scanOk && <span className="scan-tag">scan ✓</span>}
+                {!p.connected ? (
+                  <span className="offline-tag">hors ligne</span>
+                ) : p.ready ? (
+                  <span className="pill-ok">✓</span>
+                ) : (
+                  <span className="muted small">en attente</span>
+                )}
+              </span>
             </li>
           ))}
         </ul>
       </div>
       {me.ready && <p className="muted center">En attente du lancement par le maître du jeu…</p>}
+    </div>
+  );
+}
+
+/** Lobby practice: scanning the TV's test QR proves the camera opens this browser. */
+function ScanPractice({ ok }: { ok: boolean }) {
+  return ok ? (
+    <div className="panel scan-practice done">
+      <span className="scan-ok-mark small">✓</span>
+      <div className="stack" style={{ gap: 2 }}>
+        <strong>Scan OK</strong>
+        <span className="muted small">L'appareil photo ouvre bien le jeu sur ce téléphone.</span>
+      </div>
+    </div>
+  ) : (
+    <div className="panel stack scan-practice">
+      <span className="eyebrow">Entraînement au scan</span>
+      <p style={{ margin: 0 }}>
+        Ouvre l'<b>appareil photo</b> du téléphone et scanne le petit QR d'essai affiché sur la TV, puis ouvre le lien.
+      </p>
+      <p className="muted small" style={{ margin: 0 }}>
+        C'est comme ça que tu signaleras un corps pendant la partie.
+      </p>
     </div>
   );
 }

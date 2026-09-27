@@ -39,6 +39,12 @@ describe("station and admin tokens", () => {
     expect(tokens.verifyStation(tokens.bodyToken("g1", "p", 1))).toBeNull();
   });
 
+  it("binds the practice token to the game", () => {
+    expect(tokens.verifyPractice(tokens.practiceToken("g1"))).toEqual({ gameId: "g1" });
+    expect(tokens.verifyPractice(tokens.stationToken("g1"))).toBeNull();
+    expect(tokens.verifyStation(tokens.practiceToken("g1"))).toBeNull();
+  });
+
   it("derives admin tokens from the PIN", () => {
     expect(tokens.verifyAdmin(tokens.adminToken("1234"), "1234")).toBe(true);
     expect(tokens.verifyAdmin(tokens.adminToken("1234"), "9999")).toBe(false);

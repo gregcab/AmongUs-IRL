@@ -109,7 +109,7 @@ export interface ServerToClientPayloads {
   "player:session": { token: string };
   "player:kicked": Record<string, never>;
   "state:sync": ClientView;
-  "lobby:state": { players: { id: string; name: string; color: string; ready: boolean }[]; params: GameParams };
+  "lobby:state": { players: { id: string; name: string; color: string; ready: boolean; scanOk: boolean }[]; params: GameParams };
   "game:role": { role: Role; allies: Ally[] };
   "game:phase": { phase: Phase; subPhase?: MeetingSubPhase; endsAt?: number };
   "death:countdown": { endsAt: number };
@@ -132,6 +132,8 @@ export type ServerEventName = keyof ServerToClientPayloads;
 export const ROUTES = {
   report: "/r/",
   emergency: "/e/",
+  /** Lobby scan practice shown on the TV. */
+  practice: "/t/",
   /** Reserved for tasks (out of MVP scope). */
   station: "/s/",
 } as const;

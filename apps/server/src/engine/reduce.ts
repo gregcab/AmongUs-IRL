@@ -84,6 +84,8 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return reportBody(c, cmd.playerId, cmd.bodyOfId);
     case "player:emergency":
       return emergency(c, cmd.playerId);
+    case "player:practiceScan":
+      return practiceScan(c, cmd.playerId);
     case "player:arrived":
       return arrived(c, cmd.playerId);
     case "player:vote":
@@ -132,7 +134,7 @@ function colorTaken(s: GameState, color: string, exceptId?: string): boolean {
 
 function emitLobby(c: Ctx): void {
   c.emit(ALL, "lobby:state", {
-    players: playersInOrder(c.s).map((p) => ({ id: p.id, name: p.name, color: p.color, ready: p.ready })),
+    players: playersInOrder(c.s).map((p) => ({ id: p.id, name: p.name, color: p.color, ready: p.ready, scanOk: p.scanOk === true })),
     params: { ...c.s.params },
   });
 }
@@ -180,6 +182,16 @@ function ready(c: Ctx, playerId: string): Outcome {
   if (p.ready) return "noop";
   p.ready = true;
   c.log(`${p.name} est prêt`);
+  emitLobby(c);
+}
+
+function practiceScan(c: Ctx, playerId: string): Outcome {
+  if (c.s.phase !== "LOBBY") return fail("WRONG_PHASE", "Le QR d'essai ne sert que dans le lobby");
+  const p = c.player(playerId);
+  if (!p) return fail("UNKNOWN_PLAYER", "Joueur inconnu");
+  if (p.scanOk) return "noop";
+  p.scanOk = true;
+  c.log(`${p.name} a réussi le test de scan`);
   emitLobby(c);
 }
 

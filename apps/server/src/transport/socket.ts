@@ -84,6 +84,10 @@ export class Transport {
     return `${this.opts.publicUrl}/e/${this.opts.tokens.stationToken(state.gameId)}`;
   }
 
+  practiceUrl(state: GameState = this.runtime.state): string {
+    return `${this.opts.publicUrl}/t/${this.opts.tokens.practiceToken(state.gameId)}`;
+  }
+
   close(): void {
     clearInterval(this.bodyTimer);
     this.io.close();
@@ -333,7 +337,7 @@ export class Transport {
       case "admin":
         return adminView(s, this.joinUrl, this.emergencyUrl(s));
       case "tv":
-        return tvView(s, this.joinUrl);
+        return tvView(s, this.joinUrl, this.practiceUrl(s));
       case "player":
         return playerView(s, socket.data.playerId!);
       default:

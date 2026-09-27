@@ -71,6 +71,24 @@ describe("lobby", () => {
     expect(h.try({ type: "admin:updateParams", params: { killCooldownSeconds: 60 } }).error?.code).toBe("WRONG_PHASE");
   });
 
+  it("records the lobby scan practice, only in the lobby, and keeps it for the next game", () => {
+    const h = new Harness(FAST);
+    h.join(4);
+    const r = h.do({ type: "player:practiceScan", playerId: "p1" });
+    expect(h.state.players.p1!.scanOk).toBe(true);
+    expect(tvView(h.state, "http://x", "http://x/t/abc").players.find((p) => p.id === "p1")?.scanOk).toBe(true);
+    expect(r.events.map((e) => e.name)).toEqual(["lobby:state"]);
+    const before = h.state;
+    expect(h.try({ type: "player:practiceScan", playerId: "p1" }).state).toBe(before);
+    for (const id of ["p1", "p2", "p3", "p4"]) h.do({ type: "lobby:ready", playerId: id });
+    h.do({ type: "admin:start" });
+    expect(tvView(h.state, "http://x", "http://x/t/abc").practiceUrl).toBeUndefined();
+    expect(h.try({ type: "player:practiceScan", playerId: "p2" }).error?.code).toBe("WRONG_PHASE");
+    h.do({ type: "admin:backToLobby" });
+    expect(h.state.players.p1!.scanOk).toBe(true);
+    expect(tvView(h.state, "http://x", "http://x/t/abc").practiceUrl).toBe("http://x/t/abc");
+  });
+
   it("kicks players only in the lobby", () => {
     const h = new Harness();
     h.join(2);

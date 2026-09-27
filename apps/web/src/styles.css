@@ -1017,6 +1017,48 @@ a {
   }
 }
 
+.scan-tag {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--ok);
+  white-space: nowrap;
+}
+
+.scan-practice.done {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-color: rgba(47, 208, 138, 0.5);
+  background: rgba(47, 208, 138, 0.08);
+}
+
+.scan-practice:not(.done) {
+  border: 2px dashed rgba(47, 208, 138, 0.45);
+}
+
+.scan-ok-mark {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--ok);
+  color: #03170e;
+  font-size: 3.2rem;
+  font-weight: 800;
+  box-shadow: 0 0 30px rgba(47, 208, 138, 0.5);
+}
+
+.scan-ok-mark.small {
+  width: 42px;
+  height: 42px;
+  font-size: 1.4rem;
+  box-shadow: 0 0 14px rgba(47, 208, 138, 0.45);
+}
+
 .no-eject-reason {
   font-size: 1.15rem;
   font-weight: 650;

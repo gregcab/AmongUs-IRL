@@ -1,14 +1,16 @@
 import { createRoot } from "react-dom/client";
 import { AdminApp } from "./admin/AdminApp";
 import { PlayerApp } from "./player/PlayerApp";
-import { ScanPage } from "./player/ScanPage";
+import { ScanPage, type ScanType } from "./player/ScanPage";
 import { TvApp } from "./tv/TvApp";
 import "./styles.css";
 
+const SCAN_TYPES: Record<string, ScanType> = { r: "report", e: "emergency", t: "practice" };
+
 function route() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
-  const scan = /^\/(r|e)\/([^/]+)$/.exec(path);
-  if (scan) return <ScanPage type={scan[1] === "r" ? "report" : "emergency"} token={decodeURIComponent(scan[2]!)} />;
+  const scan = /^\/(r|e|t)\/([^/]+)$/.exec(path);
+  if (scan) return <ScanPage type={SCAN_TYPES[scan[1]!]!} token={decodeURIComponent(scan[2]!)} />;
   if (path.startsWith("/s/")) {
     return (
       <div className="screen center">

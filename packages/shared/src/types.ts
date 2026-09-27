@@ -23,6 +23,8 @@ export interface Player {
   emergencyUsed: number;
   ejected: boolean;
   joinedAt: number;
+  /** Scanned the lobby practice QR from this session's browser (kept across games). */
+  scanOk?: boolean;
 }
 
 /** Why nobody was ejected: tie at the top, "skip" on top, or no vote at all. */
@@ -106,6 +108,8 @@ export interface PublicPlayer {
   /** Publicly known dead (ghost). Unreported bodies stay hidden until a meeting. */
   dead: boolean;
   ejected: boolean;
+  /** Passed the lobby scan practice. */
+  scanOk: boolean;
 }
 
 export interface PublicMeeting {
@@ -197,6 +201,8 @@ export interface AnonymousView extends BaseView {
 export interface TvView extends BaseView {
   kind: "tv";
   joinUrl: string;
+  /** Lobby only: QR code to practice scanning with the phone's camera. */
+  practiceUrl?: string;
 }
 
 export interface AdminView extends BaseView {
