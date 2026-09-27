@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "server",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PORT=8080", "ADMIN_PIN=1234", "DATA_DIR=data", "node", "apps/server/dist/index.js"],
+      "port": 8080
+    }
+  ]
+}
