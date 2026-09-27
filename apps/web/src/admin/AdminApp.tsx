@@ -4,7 +4,7 @@ import { formatClock, secondsLeft, useNow } from "../lib/clock";
 import { GameOverBlock, meetingReason, ROLE_LABEL, SUBPHASE_LABEL } from "../lib/game";
 import { getAdminToken, setAdminToken } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
-import { ConnectionBanner, Countdown, PlayerChip, useToast } from "../lib/ui";
+import { ConnectionBanner, Countdown, Logo, PlayerChip, useToast } from "../lib/ui";
 import { ParamsForm } from "./ParamsForm";
 import "./admin.css";
 
@@ -72,7 +72,8 @@ function Login({ onSubmit, pending }: { onSubmit: (pin: string) => void; pending
         onSubmit(pin);
       }}
     >
-      <div className="title">Console du maître du jeu</div>
+      <Logo />
+      <div className="big">Console du maître du jeu</div>
       <input className="input" type="password" inputMode="numeric" autoFocus placeholder="Code" value={pin} onChange={(e) => setPin(e.target.value)} />
       <button className="btn" disabled={!pin || pending}>
         Entrer

@@ -2,15 +2,24 @@ import { colorOf, type PublicPlayer } from "@among-us/shared";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { formatSeconds, secondsLeft, useNow } from "./clock";
+import { Crewmate } from "./crewmate";
 
 export function ColorDot({ color, size = 18 }: { color: string; size?: number }) {
   return <span className="dot" style={{ background: colorOf(color).hex, width: size, height: size }} />;
 }
 
-export function PlayerChip({ player, strike }: { player: Pick<PublicPlayer, "name" | "color">; strike?: boolean }) {
+export function PlayerChip({
+  player,
+  strike,
+  size = 24,
+}: {
+  player: Pick<PublicPlayer, "name" | "color">;
+  strike?: boolean;
+  size?: number;
+}) {
   return (
     <span className={`chip${strike ? " strike" : ""}`}>
-      <ColorDot color={player.color} />
+      <Crewmate color={player.color} size={size} variant={strike ? "ghost" : "alive"} />
       <span className="chip-name">{player.name}</span>
     </span>
   );
@@ -120,7 +129,14 @@ export function HoldToReveal({ hint, children, className }: { hint: ReactNode; c
       onLostPointerCapture={hide}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {shown ? children : <span className="reveal-hint">{hint}</span>}
+      {shown ? (
+        children
+      ) : (
+        <span className="reveal-hint">
+          <span className="fingerprint" />
+          {hint}
+        </span>
+      )}
     </div>
   );
 }
@@ -167,4 +183,15 @@ export function ConnectionBanner({ connected }: { connected: boolean }) {
 
 export function playerById(players: PublicPlayer[], id: string | undefined): PublicPlayer | undefined {
   return id ? players.find((p) => p.id === id) : undefined;
+}
+
+export function Logo({ color = "red", size = 44 }: { color?: string; size?: number }) {
+  return (
+    <div className="logo">
+      <Crewmate color={color} size={size} />
+      <div className="logo-text">
+        Among Us<small>IRL</small>
+      </div>
+    </div>
+  );
 }

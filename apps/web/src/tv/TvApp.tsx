@@ -1,29 +1,23 @@
 import type { PublicMeeting, PublicPlayer, ServerToClientPayloads, TvView } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playAlarm, playVictory, unlockAudio } from "../lib/audio";
-import { GameOverBlock, meetingReason, ResultBlock, SUBPHASE_LABEL } from "../lib/game";
+import { AlarmOverlay, GameOverBlock, meetingReason, ResultBlock, SUBPHASE_LABEL, type AlarmInfo } from "../lib/game";
 import { useGameConnection } from "../lib/socket";
-import { ConnectionBanner, Countdown, PlayerChip, QrCode } from "../lib/ui";
+import { Crewmate } from "../lib/crewmate";
+import { ConnectionBanner, Countdown, Logo, QrCode } from "../lib/ui";
 import "./tv.css";
 
-interface Alarm {
-  title: string;
-  text: string;
-}
-
 export function TvApp() {
-  const [alarm, setAlarm] = useState<Alarm | null>(null);
+  const [alarm, setAlarm] = useState<AlarmInfo | null>(null);
   const [soundOn, setSoundOn] = useState(false);
   /** Keeps the last vote result on screen for a moment when the game ends right after it. */
   const [lingeringResult, setLingeringResult] = useState<PublicMeeting | null>(null);
   const viewRef = useRef<TvView | null>(null);
 
   const onEvent = useCallback((name: string, payload: unknown) => {
-    const players = viewRef.current?.players ?? [];
     if (name === "meeting:called") {
-      const m = payload as ServerToClientPayloads["meeting:called"];
       playAlarm();
-      setAlarm({ title: m.type === "body" ? "CORPS SIGNALÉ" : "RÉUNION D'URGENCE", text: meetingReason(m, players) });
+      setAlarm(payload as ServerToClientPayloads["meeting:called"]);
     } else if (name === "meeting:result") {
       const meeting = viewRef.current?.meeting;
       if (meeting) setLingeringResult({ ...meeting, subPhase: "RESULT", result: payload as ServerToClientPayloads["meeting:result"] });
@@ -52,14 +46,7 @@ export function TvApp() {
     <div className="tv">
       <ConnectionBanner connected={connected} />
       {tv && <TvContent view={tv} lingeringResult={lingeringResult} />}
-      {alarm && (
-        <div className="alarm">
-          <div className="title" style={{ fontSize: "6rem" }}>
-            {alarm.title}
-          </div>
-          <div className="title">{alarm.text}</div>
-        </div>
-      )}
+      {alarm && <AlarmOverlay alarm={alarm} players={tv?.players ?? []} large />}
       {!soundOn && (
         <button
           className="tv-sound"
@@ -90,6 +77,11 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
     case "ROLE_REVEAL":
       return (
         <div className="tv-center">
+          <div className="tv-lineup">
+            {view.players.map((p) => (
+              <Crewmate key={p.id} color={p.color} size={70} />
+            ))}
+          </div>
           <div className="tv-huge">Découvrez votre rôle</div>
           <p className="tv-sub">Cachez votre écran et maintenez le doigt appuyé</p>
           <Countdown endsAt={view.phaseEndsAt} className="tv-timer" />
@@ -99,7 +91,7 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
       return (
         <div className="tv-center tv-calm">
           <div className="tv-huge">Partie en cours</div>
-          <p className="tv-sub">Point de rassemblement en cas de réunion</p>
+          <p className="tv-sub">En cas de réunion, rendez-vous au point de rassemblement</p>
         </div>
       );
     case "MEETING":
@@ -114,17 +106,28 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
 }
 
 function Lobby({ view }: { view: TvView }) {
+  const ready = view.players.filter((p) => p.ready).length;
   return (
     <div className="tv-lobby">
       <div className="tv-qr">
-        <QrCode value={view.joinUrl} size={560} />
+        <Logo size={64} />
+        <div className="tv-qr-card">
+          <QrCode value={view.joinUrl} size={560} />
+        </div>
         <div className="tv-url">{view.joinUrl}</div>
         <p className="tv-sub">Scannez pour rejoindre la partie</p>
       </div>
       <div className="tv-players">
-        <div className="title">Joueurs ({view.players.length})</div>
+        <div className="row spread">
+          <div className="title">Équipage</div>
+          <div className="tv-count">
+            {ready} / {view.players.length} prêts
+          </div>
+        </div>
         <PlayerGrid players={view.players} mark={(p) => p.ready} />
-        <p className="tv-sub">Minimum {view.params.minPlayers} joueurs</p>
+        {view.players.length < view.params.minPlayers && (
+          <p className="tv-sub">Encore {view.params.minPlayers - view.players.length} joueur(s) minimum</p>
+        )}
       </div>
     </div>
   );
@@ -133,12 +136,18 @@ function Lobby({ view }: { view: TvView }) {
 function PlayerGrid({ players, mark, strike }: { players: PublicPlayer[]; mark?: (p: PublicPlayer) => boolean; strike?: boolean }) {
   return (
     <ul className="tv-grid">
-      {players.map((p) => (
-        <li key={p.id} className={strike && p.dead ? "dead" : ""}>
-          <PlayerChip player={p} strike={strike && p.dead} />
-          {mark?.(p) && <span className="check">✓</span>}
-        </li>
-      ))}
+      {players.map((p) => {
+        const dead = strike && p.dead;
+        const marked = mark?.(p);
+        return (
+          <li key={p.id} className={`${dead ? "dead" : ""}${marked ? " marked" : ""}`}>
+            <Crewmate color={p.color} size={52} variant={dead ? "ghost" : "alive"} />
+            <span className="tv-name">{p.name}</span>
+            {marked && <span className="pill-ok">✓</span>}
+            {dead && <span className="tv-dead-tag">mort</span>}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -175,7 +184,7 @@ function Meeting({ view, meeting }: { view: TvView; meeting: PublicMeeting }) {
       {meeting.subPhase === "RESULT" && (
         <div className="tv-result">
           <ResultBlock meeting={meeting} players={view.players} large />
-          <div className="title">
+          <div className="title center">
             Dispersez-vous : reprise dans <Countdown endsAt={meeting.endsAt} /> s
           </div>
         </div>

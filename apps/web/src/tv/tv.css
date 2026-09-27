@@ -10,13 +10,16 @@
 }
 
 .tv .chip {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.5rem;
 }
 
-.tv .chip .dot {
-  width: 34px !important;
-  height: 34px !important;
+.tv .plist li {
+  padding: 12px 18px;
+  font-size: 1.3rem;
+}
+
+.tv .eyebrow {
+  font-size: 1rem;
 }
 
 .tv-center {
@@ -28,34 +31,51 @@
   text-align: center;
   gap: 24px;
   padding: 40px;
-}
-
-.tv-calm {
-  background: radial-gradient(circle at 50% 40%, #121a2e, var(--bg) 70%);
+  animation: screen-in 0.4s ease-out;
 }
 
 .tv-huge {
   font-size: 5.5rem;
-  font-weight: 900;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.45);
 }
 
 .tv-sub {
   font-size: 1.6rem;
   color: var(--muted);
+  margin: 0;
 }
 
 .tv-timer {
   font-size: 8rem;
-  font-weight: 900;
+  font-weight: 700;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 40px rgba(59, 157, 255, 0.45);
+}
+
+.tv-lineup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+}
+
+.tv-lineup .crewmate:nth-child(odd) {
+  animation: bob 2.6s ease-in-out infinite;
+}
+
+.tv-lineup .crewmate:nth-child(even) {
+  animation: bob 2.6s 0.7s ease-in-out infinite;
 }
 
 .tv-lobby {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 48px;
-  padding: 48px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 56px;
+  padding: 48px 56px;
   align-items: center;
 }
 
@@ -63,26 +83,45 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   text-align: center;
 }
 
+.tv-qr .logo-text {
+  font-size: 3.4rem;
+}
+
+.tv-qr-card {
+  padding: 14px;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 0 0 6px rgba(59, 157, 255, 0.35), 0 30px 60px rgba(0, 0, 0, 0.5);
+}
+
 .tv-qr canvas {
-  width: min(40vw, 70vh) !important;
-  height: min(40vw, 70vh) !important;
-  border-radius: 16px;
+  display: block;
+  width: min(34vw, 56vh) !important;
+  height: min(34vw, 56vh) !important;
+  border-radius: 14px;
 }
 
 .tv-url {
-  font-size: 2rem;
-  font-weight: 800;
+  font-size: 1.9rem;
+  font-weight: 700;
   word-break: break-all;
+  letter-spacing: 0.02em;
 }
 
 .tv-players {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
+}
+
+.tv-count {
+  font-size: 1.5rem;
+  font-weight: 650;
+  color: var(--ok);
 }
 
 .tv-grid {
@@ -90,27 +129,59 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 14px;
 }
 
 .tv-grid li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 16px 20px;
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  padding: 12px 18px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.3s, background 0.3s;
+  animation: screen-in 0.35s ease-out;
+}
+
+.tv-grid li.marked {
+  border-color: rgba(47, 208, 138, 0.6);
+  background: rgba(47, 208, 138, 0.1);
 }
 
 .tv-grid li.dead {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
-.tv-grid .check {
-  font-size: 2rem;
+.tv-grid li.dead .tv-name {
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+}
+
+.tv-name {
+  flex: 1;
+  font-size: 1.7rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-grid .pill-ok {
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+}
+
+.tv-dead-tag {
+  font-size: 1rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--impostor);
 }
 
 .tv-page {
@@ -126,29 +197,27 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid var(--line);
 }
 
 .tv-phase {
-  font-size: 4rem;
-  font-weight: 900;
+  font-size: 4.2rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .tv-result {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  animation: eject 0.8s ease-out;
 }
 
-@keyframes eject {
-  from {
-    transform: translateX(-30%) rotate(-8deg);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
+.tv-gameover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .tv-sound {
@@ -156,7 +225,7 @@
   right: 20px;
   bottom: 20px;
   z-index: 80;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--panel-2);
   border-radius: 999px;
   padding: 12px 20px;

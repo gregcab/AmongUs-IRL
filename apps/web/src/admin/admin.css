@@ -8,6 +8,11 @@
   -webkit-user-select: auto;
 }
 
+.admin .screen.center {
+  min-height: 100vh;
+  max-width: 420px;
+}
+
 .admin-page {
   padding: 16px;
   display: flex;

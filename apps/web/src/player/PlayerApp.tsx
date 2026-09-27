@@ -1,7 +1,7 @@
 import type { AnonymousView, PlayerView, ServerToClientPayloads } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playAlarm, playVictory } from "../lib/audio";
-import { meetingReason } from "../lib/game";
+import { AlarmOverlay, type AlarmInfo } from "../lib/game";
 import { getSession, setSession } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { ConnectionBanner, useToast } from "../lib/ui";
@@ -22,7 +22,7 @@ interface Alarm {
 export function PlayerApp() {
   const [toast, showToast] = useToast();
   const [bodyQr, setBodyQr] = useState<ServerToClientPayloads["body:qr"] | null>(null);
-  const [alarm, setAlarm] = useState<Alarm | null>(null);
+  const [alarm, setAlarm] = useState<AlarmInfo | null>(null);
   const viewRef = useRef<PlayerView | AnonymousView | null>(null);
 
   const onEvent = useCallback(
@@ -43,10 +43,9 @@ export function PlayerApp() {
           break;
         case "meeting:called": {
           const m = payload as ServerToClientPayloads["meeting:called"];
-          const players = viewRef.current?.players ?? [];
           playAlarm();
           vibrate(VIBRATION.alarm);
-          setAlarm({ title: m.type === "body" ? "CORPS SIGNALÉ" : "RÉUNION D'URGENCE", text: meetingReason(m, players) });
+          setAlarm(m);
           break;
         }
         case "game:over":
@@ -111,12 +110,7 @@ export function PlayerApp() {
       <ConnectionBanner connected={connected} />
       {armed && <GestureBanner />}
       {content}
-      {alarm && (
-        <div className="alarm" onClick={() => setAlarm(null)}>
-          <div className="title">{alarm.title}</div>
-          <div className="big">{alarm.text}</div>
-        </div>
-      )}
+      {alarm && <AlarmOverlay alarm={alarm} players={viewRef.current?.players ?? []} onClose={() => setAlarm(null)} />}
       {toast}
     </>
   );
@@ -144,5 +138,5 @@ function PlayerScreens({ view, send, bodyQr }: { view: PlayerView; send: Send; b
 function GestureBanner() {
   useNow(1000);
   if (!needsGesture()) return null;
-  return <div className="offline">Touchez l'écran pour réactiver le son et l'écran allumé</div>;
+  return <div className="gesture-banner">Touchez l'écran pour réactiver le son et l'écran allumé</div>;
 }

@@ -9,7 +9,7 @@ function MeetingHeader({ view, meeting }: { view: PlayerView; meeting: PublicMee
     <div className="stack">
       <div className="row spread">
         <span className="badge">{SUBPHASE_LABEL[meeting.subPhase]}</span>
-        <Countdown endsAt={meeting.endsAt} className="countdown big" />
+        <Countdown endsAt={meeting.endsAt} className="timer-chip" />
       </div>
       <p className="muted" style={{ margin: 0 }}>
         {meetingReason(meeting, view.players)}
@@ -49,7 +49,7 @@ export function MeetingScreen({ view, send }: { view: PlayerView; send: Send }) 
       {meeting.subPhase === "GATHERING" && <Gathering view={view} meeting={meeting} send={send} />}
       {meeting.subPhase === "DISCUSSION" && (
         <>
-          <div className="big">Discussion</div>
+          <div className="title">Qui est l'imposteur ?</div>
           <Roster view={view} meeting={meeting} />
         </>
       )}
@@ -70,9 +70,9 @@ function Gathering({ view, meeting, send }: { view: PlayerView; meeting: PublicM
         </p>
       </div>
       {arrived ? (
-        <div className="panel center big check">Arrivé, en attente des autres</div>
+        <div className="panel center big check">Arrivé ✓ En attente des autres</div>
       ) : (
-        <button className="btn ok" style={{ minHeight: 84, fontSize: "1.4rem" }} onClick={() => send("player:arrived")}>
+        <button className="btn ok huge" onClick={() => send("player:arrived")}>
           Je suis arrivé
         </button>
       )}
@@ -90,7 +90,7 @@ function Voting({ view, meeting, send }: { view: PlayerView; meeting: PublicMeet
   if (hasVoted) {
     return (
       <>
-        <div className="panel center big check">Vote enregistré</div>
+        <div className="panel center big check">Vote enregistré ✓</div>
         <p className="muted">
           Votes : {meeting.voted.length} / {meeting.alive.length}
         </p>
@@ -102,7 +102,7 @@ function Voting({ view, meeting, send }: { view: PlayerView; meeting: PublicMeet
   const label = choice === SKIP_VOTE ? "Passer" : playerById(view.players, choice ?? undefined)?.name;
   return (
     <>
-      <div className="big">Vote</div>
+      <div className="title">Qui éjecter ?</div>
       <div className="stack vote-list">
         {candidates.map((p) => (
           <button key={p.id} type="button" className={choice === p.id ? "selected" : ""} onClick={() => setChoice(p.id)}>
@@ -146,7 +146,7 @@ function Result({ view, meeting }: { view: PlayerView; meeting: PublicMeeting })
     <>
       <ResultBlock meeting={meeting} players={view.players} />
       <div className="panel center">
-        <div className="big">Dispersez-vous</div>
+        <div className="title">Dispersez-vous</div>
         <p className="muted">
           Reprise dans <Countdown endsAt={meeting.endsAt} /> s
         </p>

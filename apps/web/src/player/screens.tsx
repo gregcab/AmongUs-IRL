@@ -2,9 +2,10 @@ import { colorOf, PLAYER_COLORS, type AnonymousView, type PlayerView, type Serve
 import { useState } from "react";
 import { playReadyChime, unlockAudio } from "../lib/audio";
 import { secondsLeft, useNow } from "../lib/clock";
+import { Crewmate } from "../lib/crewmate";
 import { GameOverBlock, ROLE_LABEL, RulesList } from "../lib/game";
 import { setSession } from "../lib/session";
-import { ColorDot, Countdown, HoldButton, HoldToReveal, PlayerChip, QrCode } from "../lib/ui";
+import { Countdown, HoldButton, HoldToReveal, Logo, PlayerChip, QrCode } from "../lib/ui";
 import { canVibrate, vibrate, VIBRATION } from "../lib/vibration";
 import { enableWakeLock } from "../lib/wakeLock";
 import type { Send } from "./PlayerApp";
@@ -19,11 +20,11 @@ function ColorPicker({ taken, value, onPick }: { taken: Set<string>; value?: str
           key={c.id}
           type="button"
           className={`swatch${value === c.id ? " selected" : ""}`}
-          style={{ background: c.hex, color: c.ink }}
           disabled={taken.has(c.id) && value !== c.id}
           onClick={() => onPick(c.id)}
           aria-label={c.label}
         >
+          <Crewmate color={c.id} size={34} />
           {c.label}
         </button>
       ))}
@@ -48,9 +49,9 @@ export function JoinScreen({ view, send }: { view: AnonymousView; send: Send }) 
 
   return (
     <div className="screen">
-      <div className="title">Among Us IRL</div>
-      <label className="stack">
-        <span className="muted">Ton pseudo</span>
+      <Logo color={chosen ?? "red"} />
+      <label className="stack" style={{ gap: 6 }}>
+        <span className="field-label">Ton pseudo</span>
         <input
           className="input"
           value={name}
@@ -61,12 +62,12 @@ export function JoinScreen({ view, send }: { view: AnonymousView; send: Send }) 
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <span className="muted">Ta couleur</span>
+      <span className="field-label">Ta couleur</span>
       <ColorPicker taken={taken} value={chosen} onPick={setColor} />
       <button className="btn" disabled={busy || !chosen || !name.trim()} onClick={submit}>
-        Rejoindre
+        Rejoindre la partie
       </button>
-      <p className="muted small">{view.players.length} joueur(s) inscrit(s)</p>
+      <p className="muted small center">{view.players.length} joueur(s) déjà à bord</p>
     </div>
   );
 }
@@ -88,34 +89,34 @@ export function LobbyScreen({ view, send }: { view: PlayerView; send: Send }) {
   return (
     <div className="screen">
       <div className="row spread">
-        <PlayerChip player={me} />
-        {me.ready ? <span className="badge check">Prêt</span> : <span className="badge">Pas prêt</span>}
+        <PlayerChip player={me} size={34} />
+        {me.ready ? <span className="badge ok">Prêt</span> : <span className="badge">Pas prêt</span>}
       </div>
 
       {!me.ready ? (
         <>
-          <span className="muted">Changer de couleur</span>
+          <span className="field-label">Changer de couleur</span>
           <ColorPicker taken={taken} value={me.color} onPick={(color) => color !== me.color && send("lobby:changeColor", { color })} />
-          <button className="btn ok" onClick={onReady}>
+          <button className="btn ok huge" onClick={onReady}>
             Je suis prêt
           </button>
-          <p className="muted small">Active le son, la vibration et garde l'écran allumé.</p>
+          <p className="muted small center">Active le son, la vibration et garde l'écran allumé.</p>
         </>
       ) : (
         <div className="panel stack">
-          <strong>Consignes</strong>
+          <span className="eyebrow">Consignes</span>
           <RulesList />
-          {vibrationChecked === false && <p className="muted small">Pas de vibration sur ce téléphone : surveillez l'écran.</p>}
+          {vibrationChecked === false && <p className="muted small">Pas de vibration sur ce téléphone : surveille l'écran.</p>}
         </div>
       )}
 
       <div className="panel stack">
-        <strong>Joueurs ({view.players.length})</strong>
+        <span className="eyebrow">Équipage ({view.players.length})</span>
         <ul className="plist">
           {view.players.map((p) => (
             <li key={p.id}>
               <PlayerChip player={p} />
-              {p.ready ? <span className="check">✓</span> : <span className="muted small">…</span>}
+              {p.ready ? <span className="pill-ok">✓</span> : <span className="muted small">en attente</span>}
             </li>
           ))}
         </ul>
@@ -129,18 +130,20 @@ function RoleCard({ view }: { view: PlayerView }) {
   const role = view.me.role;
   if (!role) return null;
   return (
-    <div className="stack" style={{ alignItems: "center" }}>
-      <span className="muted">Tu es</span>
+    <div className="role-card">
+      <Crewmate color={view.me.color} size={86} />
+      <span className="eyebrow">Tu es</span>
       <span className={`role-name ${role === "impostor" ? "role-impostor" : "role-crew"}`}>{ROLE_LABEL[role]}</span>
       {role === "impostor" && view.allies && view.allies.length > 0 && (
-        <div className="stack" style={{ alignItems: "center" }}>
-          <span className="muted">Tes complices</span>
+        <div className="stack" style={{ alignItems: "center", gap: 6 }}>
+          <span className="eyebrow">Tes complices</span>
           {view.allies.map((a) => (
             <PlayerChip key={a.id} player={a} />
           ))}
         </div>
       )}
       {role === "impostor" && view.allies?.length === 0 && <span className="muted small">Tu es le seul imposteur</span>}
+      {role === "crew" && <span className="muted small">Démasque les imposteurs</span>}
     </div>
   );
 }
@@ -150,10 +153,12 @@ export function RoleRevealScreen({ view }: { view: PlayerView }) {
     <div className="screen">
       <div className="row spread">
         <PlayerChip player={view.me} />
-        <Countdown endsAt={view.phaseEndsAt} className="countdown big" />
+        <Countdown endsAt={view.phaseEndsAt} className="timer-chip" />
       </div>
       <div className="title">Découvre ton rôle</div>
-      <p className="muted">Cache ton écran, puis maintiens le doigt appuyé.</p>
+      <p className="muted" style={{ margin: 0 }}>
+        Cache ton écran, puis maintiens le doigt appuyé.
+      </p>
       <HoldToReveal className="big-pad grow" hint="Maintenir pour révéler">
         <RoleCard view={view} />
       </HoldToReveal>
@@ -185,9 +190,10 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
         </span>
       </div>
 
-      <div className="panel stack grow" style={{ justifyContent: "center", textAlign: "center" }}>
+      <div className="panel hero grow">
+        <Crewmate color={me.color} size={110} />
         <div className="big">Partie en cours</div>
-        <p className="muted small">
+        <p className="muted small" style={{ margin: 0 }}>
           Réunion d'urgence : {left > 0 ? `${left} restante(s)` : "aucune restante"}
           {left > 0 && emergencyIn > 0 ? ` · dispo dans ${emergencyIn} s` : ""}
         </p>
@@ -215,7 +221,7 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
   return (
     <div className="body-screen" style={{ borderColor: color.hex }}>
       <div className="row">
-        <ColorDot color={view.me.color} size={26} />
+        <Crewmate color={view.me.color} size={30} variant="dead" />
         <span className="body-name">{view.me.name}</span>
       </div>
       {qr ? <QrCode value={qr.url} size={size} /> : <p>Génération du QR code…</p>}
@@ -227,10 +233,13 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
 export function GhostScreen({ view }: { view: PlayerView }) {
   return (
     <div className="screen">
-      <PlayerChip player={view.me} />
-      <div className="panel stack grow" style={{ justifyContent: "center", textAlign: "center" }}>
+      <PlayerChip player={view.me} strike />
+      <div className="panel hero grow">
+        <Crewmate color={view.me.color} size={110} variant="ghost" />
         <div className="title">Tu es un fantôme</div>
-        <p className="big">Tu ne parles jamais aux vivants.</p>
+        <p className="big" style={{ margin: 0 }}>
+          Tu ne parles jamais aux vivants.
+        </p>
         {view.me.ejected && <p className="muted">Tu as été éjecté.</p>}
       </div>
       <HoldToReveal hint="Maintenir pour voir ton rôle">
