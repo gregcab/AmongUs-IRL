@@ -171,7 +171,7 @@ export interface TvView extends BaseView {
   joinUrl: string;
 }
 
-export interface AdminView {
+export interface AdminView extends BaseView {
   kind: "admin";
   state: Omit<GameState, "players"> & { players: Record<string, Omit<Player, "sessionToken">> };
   joinUrl: string;

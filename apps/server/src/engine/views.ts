@@ -116,5 +116,5 @@ export function adminView(s: GameState, joinUrl: string, emergencyUrl: string): 
   const players = Object.fromEntries(
     Object.values(s.players).map(({ sessionToken: _hidden, ...rest }) => [rest.id, rest]),
   );
-  return { kind: "admin", state: { ...structuredClone(s), players }, joinUrl, emergencyUrl };
+  return { kind: "admin", ...baseView(s), state: { ...structuredClone(s), players }, joinUrl, emergencyUrl };
 }
