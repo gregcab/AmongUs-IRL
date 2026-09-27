@@ -684,6 +684,29 @@ a {
   image-rendering: pixelated;
 }
 
+.body-code {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.body-code b {
+  font-size: 2rem;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-code-btn {
+  align-self: center;
+}
+
+.code-input {
+  text-align: center;
+  font-size: 2.2rem;
+  letter-spacing: 0.4em;
+  font-variant-numeric: tabular-nums;
+}
+
 .body-name {
   font-size: 1.7rem;
   font-weight: 700;

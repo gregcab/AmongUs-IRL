@@ -55,6 +55,8 @@ export interface ClientToServerPayloads {
   "player:declareDeath": Record<string, never>;
   "player:arrived": Record<string, never>;
   "player:vote": { targetId: VoteChoice };
+  /** Short code shown under a body's QR, typed in the app when the camera opens another browser. */
+  "player:reportCode": { code: string };
 
   "admin:auth": { pin: string };
   "admin:updateParams": { params: Partial<GameParams> };
@@ -112,7 +114,7 @@ export interface ServerToClientPayloads {
   "game:phase": { phase: Phase; subPhase?: MeetingSubPhase; endsAt?: number };
   "death:countdown": { endsAt: number };
   "death:confirmed": Record<string, never>;
-  "body:qr": { token: string; url: string; expiresAt: number };
+  "body:qr": { token: string; url: string; code: string; expiresAt: number };
   "kill:cooldownStarted": { endsAt: number };
   "kill:ready": Record<string, never>;
   "meeting:called": { type: MeetingType; reporterId?: string; bodyOfId?: string; ghostMode: GhostMeetingMode };

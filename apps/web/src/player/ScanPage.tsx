@@ -75,6 +75,11 @@ export function ScanPage({ type, token }: { type: "report" | "emergency"; token:
       {state.kind === "no-session" && (
         <>
           <div className="big">Ouvrez ce lien dans le navigateur avec lequel vous avez rejoint la partie</div>
+          {type === "report" && (
+            <p className="muted">
+              Plus simple : dans le jeu, touchez « Signaler un corps avec son code » et tapez les 4 chiffres affichés sous le QR du corps.
+            </p>
+          )}
           <input id="scan-url" className="input" readOnly value={location.href} onFocus={(e) => e.currentTarget.select()} />
           <button className="btn" onClick={copy}>
             {copied ? "Lien copié" : "Copier le lien"}

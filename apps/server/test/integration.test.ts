@@ -158,6 +158,35 @@ describe("server integration", () => {
     expect(over.gameOver?.roles.find((r) => r.id === impostor.id)?.role).toBe("impostor");
   });
 
+  it("reports a body by typing its short code, with a lockout on wrong guesses", async () => {
+    const ps = await players(5);
+    const mj = await admin();
+    for (const p of ps) await p.c.ok("lobby:ready");
+    await mj.ok("admin:updateParams", { params: { deathDelaySeconds: 0 } });
+    await mj.ok("admin:start", {});
+    for (const p of ps) await p.c.until((v) => v.phase === "PLAYING", 3000);
+    const crew = ps.filter((p) => asPlayer(p.c.view!).me.role === "crew");
+    const [victim, reporter, guesser] = crew as [(typeof ps)[number], (typeof ps)[number], (typeof ps)[number]];
+
+    await victim.c.ok("player:declareDeath");
+    const qr = await victim.c.event("body:qr");
+    expect(qr.code).toMatch(/^\d{4}$/);
+
+    const wrong = String((Number(qr.code) + 1) % 10000).padStart(4, "0");
+    for (let i = 0; i < 5; i++) {
+      const res = await guesser.c.send("player:reportCode", { code: wrong });
+      expect(!res.ok && res.error.code).toBe("INVALID_TOKEN");
+    }
+    const locked = await guesser.c.send("player:reportCode", { code: qr.code });
+    expect(!locked.ok && locked.error.code).toBe("RATE_LIMITED");
+
+    await reporter.c.ok("player:reportCode", { code: ` ${qr.code.slice(0, 2)} ${qr.code.slice(2)} ` });
+    await reporter.c.until((v) => v.phase === "MEETING");
+    expect(reporter.c.events.find((e) => e.name === "meeting:called")?.payload).toMatchObject({ type: "body", reporterId: reporter.id, bodyOfId: victim.id });
+    const during = await reporter.c.send("player:reportCode", { code: qr.code });
+    expect(!during.ok && during.error.message).toMatch(/réunion/);
+  });
+
   it("handles emergency meetings through the printed station token", async () => {
     const ps = await players(4);
     const mj = await admin();

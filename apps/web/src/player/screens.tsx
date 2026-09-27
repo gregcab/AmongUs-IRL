@@ -200,6 +200,8 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
         {/* Extension point: task list (out of MVP scope). */}
       </div>
 
+      <ReportByCode send={send} />
+
       <HoldToReveal hint="Maintenir pour voir ton rôle">
         <RoleCard view={view} />
       </HoldToReveal>
@@ -215,6 +217,64 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
   );
 }
 
+/** Fallback when the camera opens a browser without the session: type the code shown under the body's QR. */
+function ReportByCode({ send }: { send: Send }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const digits = code.replace(/\D/g, "").slice(0, 4);
+
+  const submit = async () => {
+    setBusy(true);
+    const ok = await send("player:reportCode", { code: digits });
+    setBusy(false);
+    if (ok) {
+      setOpen(false);
+      setCode("");
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className="btn secondary small-btn report-code-btn" onClick={() => setOpen(true)}>
+        Signaler un corps avec son code
+      </button>
+      {open && (
+        <div className="modal-backdrop" onClick={() => setOpen(false)}>
+          <form
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (digits.length === 4) void submit();
+            }}
+          >
+            <div className="big">Code du corps</div>
+            <p className="muted" style={{ margin: 0 }}>
+              Les 4 chiffres affichés sous le QR code du corps.
+            </p>
+            <input
+              className="input code-input"
+              inputMode="numeric"
+              autoComplete="off"
+              autoFocus
+              placeholder="0000"
+              value={digits}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button className="btn danger" disabled={busy || digits.length !== 4}>
+              Signaler le corps
+            </button>
+            <button type="button" className="btn secondary" onClick={() => setOpen(false)}>
+              Annuler
+            </button>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientPayloads["body:qr"] | null }) {
   const color = colorOf(view.me.color);
   const [size] = useState(() => Math.round(Math.min(window.innerWidth, window.innerHeight) * Math.min(2, window.devicePixelRatio || 1)));
@@ -225,6 +285,11 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
         <span className="body-name">{view.me.name}</span>
       </div>
       {qr ? <QrCode value={qr.url} size={size} /> : <p>Génération du QR code…</p>}
+      {qr && (
+        <div className="body-code">
+          Code <b>{qr.code}</b>
+        </div>
+      )}
       <p style={{ margin: 0, fontWeight: 600 }}>Tu es mort. Reste sur place, écran visible, sans parler.</p>
     </div>
   );

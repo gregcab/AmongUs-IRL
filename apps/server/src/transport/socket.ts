@@ -47,6 +47,8 @@ export interface TransportOptions {
 }
 
 const GROUP_ROOMS = ["alive", "impostors", "ghosts"] as const;
+const CODE_MAX_FAILURES = 5;
+const CODE_LOCK_MS = 30_000;
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -60,6 +62,7 @@ export class Transport {
   readonly io: GameIo;
   private readonly adminAuth: AdminAuth;
   private readonly bodyTimer: ReturnType<typeof setInterval>;
+  private readonly codeAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
   constructor(
     httpServer: HttpServer,
@@ -108,6 +111,7 @@ export class Transport {
     socket.on("state:request", () => this.sendView(socket, true));
     socket.on("admin:auth", (payload, ack) => this.onAdminAuth(socket, payload, ack));
     socket.on("lobby:join", (payload, ack) => this.onJoin(socket, payload, ack));
+    socket.on("player:reportCode", (payload, ack) => this.onReportCode(socket, payload, ack));
 
     for (const name of PLAYER_EVENTS) {
       if (name === "lobby:join") continue;
@@ -178,6 +182,32 @@ export class Transport {
     socket.emit("player:session", { token: sessionToken });
     this.becomePlayer(socket, playerId);
     this.sendView(socket);
+  }
+
+  /** Report by typing the body's short code; wrong guesses are limited to stop brute force. */
+  private onReportCode(socket: GameSocket, payload: unknown, ack?: AckFn): void {
+    const playerId = socket.data.playerId;
+    if (socket.data.kind !== "player" || !playerId) return this.reply(socket, ack, { code: "NOT_AUTHENTICATED", message: "Session inconnue" });
+    const now = this.opts.clock();
+    const attempts = this.codeAttempts.get(playerId);
+    if (attempts && attempts.lockedUntil > now) {
+      return this.reply(socket, ack, { code: "RATE_LIMITED", message: `Trop d'essais, réessaie dans ${Math.ceil((attempts.lockedUntil - now) / 1000)} s` });
+    }
+    const code = isObject(payload) && typeof payload.code === "string" ? payload.code.replace(/\D/g, "") : "";
+    const s = this.runtime.state;
+    if (s.phase !== "PLAYING") {
+      // The engine produces the right message (meeting in progress, game not started…).
+      return this.reply(socket, ack, this.runtime.dispatch({ type: "player:reportBody", playerId, bodyOfId: "" }).error);
+    }
+    const bodies = Object.values(s.players).filter((p) => p.status === "BODY").map((p) => p.id);
+    const matches = code.length === 4 ? this.opts.tokens.matchBodyCode(code, s.gameId, bodies, now, s.params.bodyQrRotationSeconds) : [];
+    if (matches.length !== 1) {
+      const count = (attempts && attempts.lockedUntil === 0 ? attempts.count : 0) + 1;
+      this.codeAttempts.set(playerId, { count, lockedUntil: count >= CODE_MAX_FAILURES ? now + CODE_LOCK_MS : 0 });
+      return this.reply(socket, ack, { code: "INVALID_TOKEN", message: "Code invalide ou expiré : relis le code sous le QR" });
+    }
+    this.codeAttempts.delete(playerId);
+    this.reply(socket, ack, this.runtime.dispatch({ type: "player:reportBody", playerId, bodyOfId: matches[0]! }).error);
   }
 
   private reply(socket: GameSocket, ack: AckFn | undefined, error: GameError | undefined): void {
@@ -339,6 +369,11 @@ export class Transport {
     if (socket.data.lastBodySlot === key) return;
     socket.data.lastBodySlot = key;
     const token = this.opts.tokens.bodyToken(s.gameId, id, slot);
-    socket.emit("body:qr", { token, url: `${this.opts.publicUrl}/r/${token}`, expiresAt: (slot + 1) * rotation * 1000 });
+    socket.emit("body:qr", {
+      token,
+      url: `${this.opts.publicUrl}/r/${token}`,
+      code: this.opts.tokens.bodyCode(s.gameId, id, slot),
+      expiresAt: (slot + 1) * rotation * 1000,
+    });
   }
 }

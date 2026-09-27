@@ -59,6 +59,18 @@ export class Tokens {
     return { gameId: parts[1]!, playerId: parts[2]! };
   }
 
+  /** 4-digit code rotating with the body QR, for typing instead of scanning. */
+  bodyCode(gameId: string, playerId: string, slot: number): string {
+    const digest = createHmac("sha256", this.secret).update(`C|${gameId}|${playerId}|${slot}`).digest();
+    return String(digest.readUInt32BE(0) % 10000).padStart(4, "0");
+  }
+
+  /** Bodies whose code matches for the current or the previous rotation slot. */
+  matchBodyCode(code: string, gameId: string, candidates: string[], now: number, rotationSeconds: number): string[] {
+    const current = Tokens.bodySlot(now, rotationSeconds);
+    return candidates.filter((id) => [current, current - 1].some((slot) => safeEqual(this.bodyCode(gameId, id, slot), code)));
+  }
+
   stationToken(gameId: string): string {
     return this.seal(`E|${gameId}`);
   }
