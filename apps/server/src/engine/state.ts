@@ -1,10 +1,20 @@
-import { DEFAULT_PARAMS, type GameParams, type GameState, type Player } from "@among-us/shared";
+import {
+  DEFAULT_PARAMS,
+  STATION_IDS,
+  stationDef,
+  stationEnabled,
+  type GameParams,
+  type GameState,
+  type Player,
+  type Station,
+  type StationId,
+} from "@among-us/shared";
 
 export function createInitialState(gameId: string, params: GameParams = DEFAULT_PARAMS, timeScale = 1): GameState {
   return {
     gameId,
     phase: "LOBBY",
-    params: { ...params },
+    params: structuredClone(params),
     players: {},
     meetingHistory: [],
     kills: [],
@@ -12,6 +22,14 @@ export function createInitialState(gameId: string, params: GameParams = DEFAULT_
     timeScale,
     log: [],
   };
+}
+
+/**
+ * Brings a snapshot saved by an older version up to date: parameters added since then take
+ * their default value.
+ */
+export function upgradeState(saved: GameState): GameState {
+  return { ...saved, params: { ...structuredClone(DEFAULT_PARAMS), ...saved.params } };
 }
 
 /** DYING players still count as alive for everyone else and for win conditions. */
@@ -43,6 +61,23 @@ export function normalizeName(raw: unknown): string | null {
   const length = [...name].length;
   if (length < 1 || length > 16 || [...name].some((ch) => isForbiddenChar(ch.codePointAt(0)!))) return null;
   return name;
+}
+
+/** Station with the game master's name and location. */
+export function station(s: GameState, id: StationId): Station {
+  const setup = s.stationSetup?.[id];
+  return { id, name: setup?.name || stationDef(id).name, location: setup?.location ?? "" };
+}
+
+/** "Name (location)", as shown in messages. */
+export function stationLabel(s: GameState, id: StationId): string {
+  const { name, location } = station(s, id);
+  return location ? `${name} (${location})` : name;
+}
+
+/** Stations used by the current settings. */
+export function enabledStations(s: GameState): Station[] {
+  return STATION_IDS.filter((id) => stationEnabled(s.params, id)).map((id) => station(s, id));
 }
 
 export function nameKey(name: string): string {

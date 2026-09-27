@@ -1,6 +1,6 @@
 import { colorOf, type PublicPlayer } from "@among-us/shared";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { formatSeconds, secondsLeft, useNow } from "./clock";
 import { Crewmate } from "./crewmate";
 
@@ -119,20 +119,48 @@ export function HoldButton({
   );
 }
 
-/** Shows `children` only while the finger stays on the pad. */
-export function HoldToReveal({ hint, children, className }: { hint: ReactNode; children: ReactNode; className?: string }) {
+/**
+ * Shows `children` only while the finger stays on the pad. Sliding the finger onto an element
+ * marked `data-reveal-action` and releasing it there calls `onAction` (hidden menus).
+ */
+export function HoldToReveal({
+  hint,
+  children,
+  className,
+  onAction,
+}: {
+  hint: ReactNode;
+  children: ReactNode;
+  className?: string;
+  onAction?: (action: string) => void;
+}) {
   const [shown, setShown] = useState(false);
-  const hide = () => setShown(false);
+  const origin = useRef<{ x: number; y: number; id: number } | null>(null);
+  const hide = () => {
+    origin.current = null;
+    setShown(false);
+  };
+  const release = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const start = origin.current;
+    if (!start || e.pointerId !== start.id) return;
+    // A tap on the spot where a button appears must not trigger it: the finger has to slide there.
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y) > 16;
+    const target = moved ? document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-reveal-action]") : null;
+    hide();
+    if (target && e.currentTarget.contains(target) && onAction) onAction(target.dataset.revealAction!);
+  };
   return (
     <div
       className={`reveal ${className ?? ""}${shown ? " shown" : ""}`}
       onPointerDown={(e) => {
+        if (origin.current) return;
         capture(e.currentTarget, e.pointerId);
+        origin.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
         setShown(true);
       }}
-      onPointerUp={hide}
-      onPointerCancel={hide}
-      onLostPointerCapture={hide}
+      onPointerUp={release}
+      onPointerCancel={(e) => e.pointerId === origin.current?.id && hide()}
+      onLostPointerCapture={(e) => e.pointerId === origin.current?.id && hide()}
       onContextMenu={(e) => e.preventDefault()}
     >
       {shown ? (
@@ -143,6 +171,63 @@ export function HoldToReveal({ hint, children, className }: { hint: ReactNode; c
           {hint}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Press-and-hold pad reporting `onHold(true)` repeatedly (heartbeat) while pressed and
+ * `onHold(false)` on release, when the page is hidden, or when it unmounts.
+ */
+export function HoldPad({
+  onHold,
+  heartbeatMs = 1500,
+  disabled,
+  className,
+  children,
+}: {
+  onHold: (holding: boolean) => void;
+  heartbeatMs?: number;
+  disabled?: boolean;
+  className?: string;
+  children: (holding: boolean) => ReactNode;
+}) {
+  const [holding, setHolding] = useState(false);
+  const holdRef = useRef(onHold);
+  holdRef.current = onHold;
+
+  useEffect(() => {
+    if (!holding) return;
+    holdRef.current(true);
+    const beat = setInterval(() => holdRef.current(true), heartbeatMs);
+    const onHidden = () => document.visibilityState !== "visible" && setHolding(false);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      clearInterval(beat);
+      document.removeEventListener("visibilitychange", onHidden);
+      holdRef.current(false);
+    };
+  }, [holding, heartbeatMs]);
+
+  useEffect(() => {
+    if (disabled) setHolding(false);
+  }, [disabled]);
+
+  const release = () => setHolding(false);
+  return (
+    <div
+      className={`hold-pad ${className ?? ""}${holding ? " holding" : ""}${disabled ? " disabled" : ""}`}
+      onPointerDown={(e) => {
+        if (disabled) return;
+        capture(e.currentTarget, e.pointerId);
+        setHolding(true);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {children(holding)}
     </div>
   );
 }

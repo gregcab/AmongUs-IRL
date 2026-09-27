@@ -11,16 +11,8 @@ function route() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const scan = /^\/(r|e|t)\/([^/]+)$/.exec(path);
   if (scan) return <ScanPage type={SCAN_TYPES[scan[1]!]!} token={decodeURIComponent(scan[2]!)} />;
-  if (path.startsWith("/s/")) {
-    return (
-      <div className="screen center">
-        <div className="big">Les tâches arrivent bientôt.</div>
-        <a className="btn secondary" href="/">
-          Retour au jeu
-        </a>
-      </div>
-    );
-  }
+  const station = /^\/s\/([^/]+)$/.exec(path);
+  if (station) return <PlayerApp stationToken={decodeURIComponent(station[1]!)} />;
   if (path === "/tv") return <TvApp />;
   if (path === "/admin") return <AdminApp />;
   return <PlayerApp />;

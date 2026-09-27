@@ -96,7 +96,7 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 
 - **Tuer** : l'imposteur pose deux doigts sur l'épaule de la victime en chuchotant « tu es mort ». Il ne touche jamais son téléphone à ce moment-là.
 - **Mourir** : la victime maintient **Je suis mort** 1,5 s. Après un court délai, son téléphone affiche un QR code : c'est son corps. Elle reste sur place, écran visible, sans parler.
-- **Signaler** : un joueur vivant scanne le corps avec l'**appareil photo** de son téléphone. Il faut ouvrir le lien dans le navigateur qui a servi à rejoindre la partie. Si l'appareil photo ouvre un autre navigateur, le joueur touche **Signaler un corps avec son code** dans le jeu et tape les 4 chiffres affichés sous le QR du corps (le code change avec le QR ; 5 erreurs bloquent 30 s).
+- **Signaler** : un joueur vivant scanne le corps avec l'**appareil photo** de son téléphone. Il faut ouvrir le lien dans le navigateur qui a servi à rejoindre la partie. Si l'appareil photo ouvre un autre navigateur, le joueur touche **Code d'un corps** dans le jeu et tape les 4 chiffres affichés sous le QR du corps (le code change avec le QR ; 5 erreurs bloquent 30 s).
 - **Réunion d'urgence** : scanner le QR code imprimé de la station.
 - **Fantômes** : ils ne parlent jamais aux vivants.
 

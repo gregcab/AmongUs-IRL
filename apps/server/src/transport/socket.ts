@@ -1,20 +1,36 @@
 import {
   ADMIN_EVENTS,
+  isStationId,
   PLAYER_EVENTS,
+  SABOTAGE_KINDS,
+  STATION_IDS,
   type Ack,
   type ClientEventName,
   type ClientToServerPayloads,
   type ClientView,
   type GameError,
   type GameState,
+  type SabotageKind,
   type ServerToClientPayloads,
+  type Station,
+  type StationId,
 } from "@among-us/shared";
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { AdminAuth, newPlayerId, newSessionToken } from "../auth";
-import { adminView, anonymousView, isAlive, playerView, tvView, type Command, type OutboundEvent, type ReduceResult } from "../engine";
+import {
+  adminView,
+  anonymousView,
+  enabledStations,
+  isAlive,
+  playerView,
+  tvView,
+  type Command,
+  type OutboundEvent,
+  type ReduceResult,
+} from "../engine";
 import type { GameRuntime } from "../game";
-import { Tokens } from "../tokens";
+import { safeEqual, Tokens } from "../tokens";
 
 type AckFn = (res: Ack<unknown>) => void;
 
@@ -50,6 +66,37 @@ const GROUP_ROOMS = ["alive", "impostors", "ghosts"] as const;
 const CODE_MAX_FAILURES = 5;
 const CODE_LOCK_MS = 30_000;
 
+/** Locks a player out after repeated wrong codes, against brute force. */
+class AttemptLimiter {
+  private readonly attempts = new Map<string, { count: number; lockedUntil: number }>();
+
+  /** Seconds left before `key` may try again, 0 when not locked. */
+  lockedFor(key: string, now: number): number {
+    const entry = this.attempts.get(key);
+    return entry && entry.lockedUntil > now ? Math.ceil((entry.lockedUntil - now) / 1000) : 0;
+  }
+
+  fail(key: string, now: number): void {
+    const entry = this.attempts.get(key);
+    // An expired lock starts a fresh series of attempts.
+    const count = (entry && entry.lockedUntil === 0 ? entry.count : 0) + 1;
+    this.attempts.set(key, { count, lockedUntil: count >= CODE_MAX_FAILURES ? now + CODE_LOCK_MS : 0 });
+  }
+
+  reset(key: string): void {
+    this.attempts.delete(key);
+  }
+}
+
+function rateLimited(seconds: number): GameError {
+  return { code: "RATE_LIMITED", message: `Trop d'essais, réessaie dans ${seconds} s` };
+}
+
+export interface PrintableStation extends Station {
+  url: string;
+  code: string;
+}
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -62,7 +109,11 @@ export class Transport {
   readonly io: GameIo;
   private readonly adminAuth: AdminAuth;
   private readonly bodyTimer: ReturnType<typeof setInterval>;
-  private readonly codeAttempts = new Map<string, { count: number; lockedUntil: number }>();
+  /** Wrong body codes. */
+  private readonly bodyCodes = new AttemptLimiter();
+  /** Wrong station codes and wrong oxygen codes. */
+  private readonly stationAttempts = new AttemptLimiter();
+  private codesCache?: { gameId: string; codes: Map<string, string> };
 
   constructor(
     httpServer: HttpServer,
@@ -81,11 +132,27 @@ export class Transport {
   }
 
   emergencyUrl(state: GameState = this.runtime.state): string {
-    return `${this.opts.publicUrl}/e/${this.opts.tokens.stationToken(state.gameId)}`;
+    return `${this.opts.publicUrl}/e/${this.opts.tokens.emergencyToken(state.gameId)}`;
   }
 
   practiceUrl(state: GameState = this.runtime.state): string {
     return `${this.opts.publicUrl}/t/${this.opts.tokens.practiceToken(state.gameId)}`;
+  }
+
+  /** Codes printed under the station QR codes of the current game. */
+  private stationCodes(gameId: string): Map<string, string> {
+    if (this.codesCache?.gameId !== gameId) this.codesCache = { gameId, codes: this.opts.tokens.stationCodes(gameId, STATION_IDS) };
+    return this.codesCache.codes;
+  }
+
+  /** Stations to print for the current game and settings. */
+  printableStations(state: GameState = this.runtime.state): PrintableStation[] {
+    const codes = this.stationCodes(state.gameId);
+    return enabledStations(state).map((st) => ({
+      ...st,
+      url: `${this.opts.publicUrl}/s/${this.opts.tokens.stationToken(state.gameId, st.id)}`,
+      code: codes.get(st.id)!,
+    }));
   }
 
   close(): void {
@@ -116,6 +183,22 @@ export class Transport {
     socket.on("admin:auth", (payload, ack) => this.onAdminAuth(socket, payload, ack));
     socket.on("lobby:join", (payload, ack) => this.onJoin(socket, payload, ack));
     socket.on("player:reportCode", (payload, ack) => this.onReportCode(socket, payload, ack));
+    socket.on("station:open", (payload, ack) => this.onStation(socket, payload, ack, (playerId, stationId) => ({ type: "station:open", playerId, stationId })));
+    socket.on("station:hold", (payload, ack) =>
+      this.onStation(socket, payload, ack, (playerId, stationId, p) =>
+        typeof p.holding === "boolean" ? { type: "station:hold", playerId, stationId, holding: p.holding } : null,
+      ),
+    );
+    socket.on("station:code", (payload, ack) =>
+      this.onStation(socket, payload, ack, (playerId, stationId, p) =>
+        typeof p.code === "string" && p.code.length <= 12 ? { type: "station:code", playerId, stationId, code: p.code } : null,
+      ),
+    );
+    socket.on("station:switch", (payload, ack) =>
+      this.onStation(socket, payload, ack, (playerId, stationId, p) =>
+        typeof p.index === "number" ? { type: "station:switch", playerId, stationId, index: p.index } : null,
+      ),
+    );
 
     for (const name of PLAYER_EVENTS) {
       if (name === "lobby:join") continue;
@@ -193,10 +276,8 @@ export class Transport {
     const playerId = socket.data.playerId;
     if (socket.data.kind !== "player" || !playerId) return this.reply(socket, ack, { code: "NOT_AUTHENTICATED", message: "Session inconnue" });
     const now = this.opts.clock();
-    const attempts = this.codeAttempts.get(playerId);
-    if (attempts && attempts.lockedUntil > now) {
-      return this.reply(socket, ack, { code: "RATE_LIMITED", message: `Trop d'essais, réessaie dans ${Math.ceil((attempts.lockedUntil - now) / 1000)} s` });
-    }
+    const locked = this.bodyCodes.lockedFor(playerId, now);
+    if (locked > 0) return this.reply(socket, ack, rateLimited(locked));
     const code = isObject(payload) && typeof payload.code === "string" ? payload.code.replace(/\D/g, "") : "";
     const s = this.runtime.state;
     if (s.phase !== "PLAYING") {
@@ -206,12 +287,62 @@ export class Transport {
     const bodies = Object.values(s.players).filter((p) => p.status === "BODY").map((p) => p.id);
     const matches = code.length === 4 ? this.opts.tokens.matchBodyCode(code, s.gameId, bodies, now, s.params.bodyQrRotationSeconds) : [];
     if (matches.length !== 1) {
-      const count = (attempts && attempts.lockedUntil === 0 ? attempts.count : 0) + 1;
-      this.codeAttempts.set(playerId, { count, lockedUntil: count >= CODE_MAX_FAILURES ? now + CODE_LOCK_MS : 0 });
+      this.bodyCodes.fail(playerId, now);
       return this.reply(socket, ack, { code: "INVALID_TOKEN", message: "Code invalide ou expiré : relis le code sous le QR" });
     }
-    this.codeAttempts.delete(playerId);
+    this.bodyCodes.reset(playerId);
     this.reply(socket, ack, this.runtime.dispatch({ type: "player:reportBody", playerId, bodyOfId: matches[0]! }).error);
+  }
+
+  /** Where the player stands: from the station QR token, or from the code printed under it. */
+  private stationFrom(at: unknown, playerId: string): StationId | GameError {
+    const s = this.runtime.state;
+    if (!isObject(at)) return badRequest();
+    if (typeof at.token === "string") {
+      const decoded = this.opts.tokens.verifyStation(at.token);
+      if (!decoded || !isStationId(decoded.stationId)) return { code: "INVALID_TOKEN", message: "QR de station invalide" };
+      if (decoded.gameId !== s.gameId) return { code: "INVALID_TOKEN", message: "QR de station périmé : demandez au MJ de réimprimer les stations" };
+      return decoded.stationId;
+    }
+    if (typeof at.code !== "string") return badRequest();
+    const now = this.opts.clock();
+    const locked = this.stationAttempts.lockedFor(playerId, now);
+    if (locked > 0) return rateLimited(locked);
+    const code = at.code.replace(/\D/g, "");
+    let found: StationId | undefined;
+    for (const [id, expected] of this.stationCodes(s.gameId)) if (safeEqual(code, expected) && isStationId(id)) found = id;
+    if (!found) {
+      this.stationAttempts.fail(playerId, now);
+      return { code: "INVALID_TOKEN", message: "Code de station inconnu : relis le code sous le QR" };
+    }
+    return found;
+  }
+
+  private onStation(
+    socket: GameSocket,
+    payload: unknown,
+    ack: AckFn | undefined,
+    build: (playerId: string, stationId: StationId, payload: Record<string, unknown>) => Command | null,
+  ): void {
+    const playerId = socket.data.playerId;
+    if (socket.data.kind !== "player" || !playerId) return this.reply(socket, ack, { code: "NOT_AUTHENTICATED", message: "Session inconnue" });
+    const p = isObject(payload) ? payload : {};
+    const stationId = this.stationFrom(p.at, playerId);
+    if (typeof stationId !== "string") return this.reply(socket, ack, stationId);
+    const command = build(playerId, stationId, p);
+    if (!command) return this.reply(socket, ack, badRequest());
+    const now = this.opts.clock();
+    if (command.type === "station:code") {
+      const locked = this.stationAttempts.lockedFor(playerId, now);
+      if (locked > 0) return this.reply(socket, ack, rateLimited(locked));
+    }
+    const { error } = this.runtime.dispatch(command);
+    if (command.type === "station:code") {
+      if (error?.code === "WRONG_CODE") this.stationAttempts.fail(playerId, now);
+      else if (!error) this.stationAttempts.reset(playerId);
+    }
+    if (error) return this.reply(socket, ack, error);
+    if (typeof ack === "function") ack({ ok: true, data: { stationId } });
   }
 
   private reply(socket: GameSocket, ack: AckFn | undefined, error: GameError | undefined): void {
@@ -238,6 +369,8 @@ export class Transport {
         return { type: name, playerId };
       case "player:vote":
         return typeof p.targetId === "string" ? { type: name, playerId, targetId: p.targetId } : null;
+      case "player:sabotage":
+        return SABOTAGE_KINDS.includes(p.kind as SabotageKind) ? { type: name, playerId, kind: p.kind as SabotageKind } : null;
       default:
         return null;
     }
@@ -268,7 +401,16 @@ export class Transport {
         return p.winner === "crew" || p.winner === "impostors" ? { type: name, winner: p.winner } : null;
       case "admin:advancePhase":
       case "admin:backToLobby":
+      case "admin:repairSabotage":
         return { type: name };
+      case "admin:updateStation": {
+        const stationId = str(p.stationId);
+        const stationName = str(p.name);
+        const location = str(p.location);
+        return stationId && isStationId(stationId) && stationName !== undefined && location !== undefined
+          ? { type: name, stationId, name: stationName, location }
+          : null;
+      }
       default:
         return null;
     }

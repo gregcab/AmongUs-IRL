@@ -198,7 +198,7 @@ describe("server integration", () => {
     await mj.ok("admin:start", {});
     await ps[0]!.c.until((v) => v.phase === "PLAYING", 3000);
 
-    const wrongGame = app.tokens.stationToken("another-game");
+    const wrongGame = app.tokens.emergencyToken("another-game");
     expect((await post("/api/emergency", { token: wrongGame }, { [SESSION_HEADER]: ps[0]!.token })).status).toBe(400);
     const res = await post("/api/emergency", { token: stationToken }, { cookie: `amongus_session=${ps[0]!.token}` });
     expect(res).toEqual({ status: 200, body: { ok: true } });
@@ -225,11 +225,72 @@ describe("server integration", () => {
     expect(mine.players.map((p) => p.scanOk)).toEqual([true, false]);
   });
 
+  it("opens stations by QR token or printed code and repairs a sabotage", async () => {
+    const ps = await players(5);
+    const mj = await admin();
+    for (const p of ps) await p.c.ok("lobby:ready");
+    await mj.ok("admin:updateParams", { params: { sabotageCooldownSeconds: 5 } });
+    const stations = app.transport.printableStations();
+    expect(stations.map((st) => st.id)).toEqual(["reactor-a", "reactor-b", "o2-a", "o2-b", "admin", "electrical"]);
+    expect(new Set(stations.map((st) => st.code)).size).toBe(stations.length);
+    const at = (id: string) => ({ token: stations.find((st) => st.id === id)!.url.split("/s/")[1]! });
+    const codeOf = (id: string) => stations.find((st) => st.id === id)!.code;
+
+    await mj.ok("admin:start", {});
+    for (const p of ps) await p.c.until((v) => v.phase === "PLAYING", 3000);
+    const impostor = ps.find((p) => asPlayer(p.c.view!).me.role === "impostor")!;
+    const crew = ps.filter((p) => p !== impostor);
+
+    expect(await crew[0]!.c.ok("station:open", { at: at("admin") })).toEqual({ stationId: "admin" });
+    expect(await crew[0]!.c.ok("station:open", { at: { code: codeOf("o2-b") } })).toEqual({ stationId: "o2-b" });
+    const forged = await crew[0]!.c.send("station:open", { at: { token: app.tokens.stationToken("old-game", "admin") } });
+    expect(!forged.ok && forged.error.message).toMatch(/périmé/);
+
+    await impostor.c.until((v) => (asPlayer(v).sabotageCooldownEndsAt ?? Infinity) <= Date.now(), 3000);
+    await impostor.c.ok("player:sabotage", { kind: "oxygen" });
+    await crew[1]!.c.event("sabotage:started");
+    await crew[0]!.c.ok("station:open", { at: at("admin") });
+    const codes = asPlayer(await crew[0]!.c.until((v) => asPlayer(v).sabotage?.codes !== undefined)).sabotage!.codes!;
+    expect(asPlayer(crew[1]!.c.view!).sabotage?.codes).toBeUndefined();
+    await crew[0]!.c.ok("station:code", { at: at("o2-a"), code: codes["o2-a"] });
+    await crew[1]!.c.ok("station:code", { at: { code: codeOf("o2-b") }, code: codes["o2-b"] });
+    await crew[2]!.c.event("sabotage:repaired");
+    expect(crew[2]!.c.view?.sabotage).toBeUndefined();
+
+    // Wrong station codes lock the player out for a while.
+    for (let i = 0; i < 5; i++) await crew[3]!.c.send("station:open", { at: { code: "abcd" } });
+    const locked = await crew[3]!.c.send("station:open", { at: { code: codeOf("admin") } });
+    expect(!locked.ok && locked.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("serves the printable stations page to the admin only", async () => {
+    expect((await fetch(`${url}/api/print/stations`)).status).toBe(401);
+    const res = await fetch(`${url}/api/print/stations`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });
+    const html = await res.text();
+    expect(html.match(/<svg/g)).toHaveLength(6);
+    expect(html).toContain("Électricité");
+  });
+
   it("serves the printable emergency page to the admin only", async () => {
     expect((await fetch(`${url}/api/print/emergency`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/emergency`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("<svg");
+  });
+
+  it("upgrades a snapshot saved before new parameters existed", async () => {
+    await players(1);
+    const saved = structuredClone(app.runtime.state) as unknown as { params: Record<string, unknown> };
+    delete saved.params.enabledSabotages;
+    delete saved.params.sabotageCooldownSeconds;
+    app.persistence.saveSnapshot(saved as never, Date.now());
+    for (const c of clients.splice(0)) c.close();
+    await app.close();
+    await boot();
+    expect(app.runtime.state.params.enabledSabotages).toEqual(["reactor", "oxygen", "lights"]);
+    expect(app.runtime.state.params.sabotageCooldownSeconds).toBe(90);
+    const tv = await client({ tv: true });
+    expect((await tv.until((v) => v.kind === "tv")).stations).toHaveLength(6);
   });
 
   it("restores state, sessions and timers after a restart", async () => {

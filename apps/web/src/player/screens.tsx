@@ -1,14 +1,19 @@
-import { colorOf, PLAYER_COLORS, type AnonymousView, type PlayerView, type ServerToClientPayloads } from "@among-us/shared";
+import { colorOf, PLAYER_COLORS, type AnonymousView, type PlayerView, type ServerToClientPayloads, type StationAccess } from "@among-us/shared";
 import { useState } from "react";
 import { playReadyChime, unlockAudio } from "../lib/audio";
 import { secondsLeft, useNow } from "../lib/clock";
 import { Crewmate } from "../lib/crewmate";
 import { GameOverBlock, ROLE_LABEL, RulesList } from "../lib/game";
+import { SabotageInfo } from "../lib/stations";
 import { setSession } from "../lib/session";
 import { Countdown, HoldButton, HoldToReveal, Logo, PlayerChip, QrCode } from "../lib/ui";
 import { canVibrate, vibrate, VIBRATION } from "../lib/vibration";
 import { enableWakeLock } from "../lib/wakeLock";
 import type { Send } from "./PlayerApp";
+import { SabotageMenu, SabotageTarget } from "./sabotage";
+
+/** Opens a station from its printed code; resolves to true on success. */
+export type OpenStationFn = (at: StationAccess) => Promise<boolean>;
 
 const DEATH_HOLD_MS = 1500;
 
@@ -179,8 +184,30 @@ function RoleCard({ view }: { view: PlayerView }) {
       )}
       {role === "impostor" && view.allies?.length === 0 && <span className="muted small">Tu es le seul imposteur</span>}
       {role === "crew" && <span className="muted small">Démasque les imposteurs</span>}
+      {role === "impostor" && <SabotageTarget view={view} />}
     </div>
   );
+}
+
+/**
+ * Role pad of the game screens. The impostors' sabotage menu hides inside: the screen looks
+ * the same for everybody until the finger slides onto the (impostor-only) target.
+ */
+function RolePad({ view, send }: { view: PlayerView; send: Send }) {
+  const [menu, setMenu] = useState(false);
+  return (
+    <>
+      <HoldToReveal hint="Maintenir pour voir ton rôle" onAction={(action) => action === "sabotage" && setMenu(true)}>
+        <RoleCard view={view} />
+      </HoldToReveal>
+      {menu && view.me.role === "impostor" && <SabotageMenu view={view} send={send} onClose={() => setMenu(false)} />}
+    </>
+  );
+}
+
+export function SabotageBanner({ view }: { view: PlayerView }) {
+  if (!view.sabotage) return null;
+  return <SabotageInfo sabotage={view.sabotage} stations={view.stations} />;
 }
 
 export function RoleRevealScreen({ view }: { view: PlayerView }) {
@@ -208,7 +235,7 @@ function StatusIndicator({ view }: { view: PlayerView }) {
   return <span className={`indicator${armed ? " armed" : ""}`} aria-hidden />;
 }
 
-export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) {
+export function PlayingScreen({ view, send, openStation }: { view: PlayerView; send: Send; openStation: OpenStationFn }) {
   const { me, params } = view;
   const now = useNow(500);
   const dying = me.status === "DYING";
@@ -225,8 +252,10 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
         </span>
       </div>
 
-      <div className="panel hero grow">
-        <Crewmate color={me.color} size={110} />
+      <SabotageBanner view={view} />
+
+      <div className={`panel hero grow${view.sabotage ? " compact" : ""}`}>
+        {!view.sabotage && <Crewmate color={me.color} size={110} />}
         <div className="big">Partie en cours</div>
         <p className="muted small" style={{ margin: 0 }}>
           Réunion d'urgence : {left > 0 ? `${left} restante(s)` : "aucune restante"}
@@ -235,11 +264,19 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
         {/* Extension point: task list (out of MVP scope). */}
       </div>
 
-      <ReportByCode send={send} />
+      <div className="code-buttons">
+        <CodeEntry
+          label="Code d'un corps"
+          title="Code du corps"
+          help="Les 4 chiffres affichés sous le QR code du corps."
+          submitLabel="Signaler le corps"
+          danger
+          onSubmit={(code) => send("player:reportCode", { code }).then(Boolean)}
+        />
+        {view.stations.length > 0 && <StationCodeEntry openStation={openStation} />}
+      </div>
 
-      <HoldToReveal hint="Maintenir pour voir ton rôle">
-        <RoleCard view={view} />
-      </HoldToReveal>
+      <RolePad view={view} send={send} />
 
       <HoldButton
         label="Je suis mort"
@@ -252,8 +289,34 @@ export function PlayingScreen({ view, send }: { view: PlayerView; send: Send }) 
   );
 }
 
-/** Fallback when the camera opens a browser without the session: type the code shown under the body's QR. */
-function ReportByCode({ send }: { send: Send }) {
+export function StationCodeEntry({ openStation }: { openStation: OpenStationFn }) {
+  return (
+    <CodeEntry
+      label="Code d'une station"
+      title="Code de la station"
+      help="Les 4 chiffres imprimés sous le QR code de la station."
+      submitLabel="Ouvrir la station"
+      onSubmit={(code) => openStation({ code })}
+    />
+  );
+}
+
+/** Fallback when the camera opens a browser without the session: type the code printed or shown under a QR. */
+function CodeEntry({
+  label,
+  title,
+  help,
+  submitLabel,
+  danger,
+  onSubmit,
+}: {
+  label: string;
+  title: string;
+  help: string;
+  submitLabel: string;
+  danger?: boolean;
+  onSubmit: (code: string) => Promise<boolean>;
+}) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -261,7 +324,7 @@ function ReportByCode({ send }: { send: Send }) {
 
   const submit = async () => {
     setBusy(true);
-    const ok = await send("player:reportCode", { code: digits });
+    const ok = await onSubmit(digits);
     setBusy(false);
     if (ok) {
       setOpen(false);
@@ -271,8 +334,8 @@ function ReportByCode({ send }: { send: Send }) {
 
   return (
     <>
-      <button type="button" className="btn secondary small-btn report-code-btn" onClick={() => setOpen(true)}>
-        Signaler un corps avec son code
+      <button type="button" className="btn secondary small-btn" onClick={() => setOpen(true)}>
+        {label}
       </button>
       {open && (
         <div className="modal-backdrop" onClick={() => setOpen(false)}>
@@ -284,9 +347,9 @@ function ReportByCode({ send }: { send: Send }) {
               if (digits.length === 4) void submit();
             }}
           >
-            <div className="big">Code du corps</div>
+            <div className="big">{title}</div>
             <p className="muted" style={{ margin: 0 }}>
-              Les 4 chiffres affichés sous le QR code du corps.
+              {help}
             </p>
             <input
               className="input code-input"
@@ -297,8 +360,8 @@ function ReportByCode({ send }: { send: Send }) {
               value={digits}
               onChange={(e) => setCode(e.target.value)}
             />
-            <button className="btn danger" disabled={busy || digits.length !== 4}>
-              Signaler le corps
+            <button className={`btn ${danger ? "danger" : "ok"}`} disabled={busy || digits.length !== 4}>
+              {submitLabel}
             </button>
             <button type="button" className="btn secondary" onClick={() => setOpen(false)}>
               Annuler
@@ -330,21 +393,25 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
   );
 }
 
-export function GhostScreen({ view }: { view: PlayerView }) {
+export function GhostScreen({ view, send, openStation }: { view: PlayerView; send: Send; openStation: OpenStationFn }) {
   return (
     <div className="screen">
       <PlayerChip player={view.me} strike />
-      <div className="panel hero grow">
-        <Crewmate color={view.me.color} size={110} variant="ghost" />
+      <SabotageBanner view={view} />
+      <div className={`panel hero grow${view.sabotage ? " compact" : ""}`}>
+        {!view.sabotage && <Crewmate color={view.me.color} size={110} variant="ghost" />}
         <div className="title">Tu es un fantôme</div>
         <p className="big" style={{ margin: 0 }}>
           Tu ne parles jamais aux vivants.
         </p>
         {view.me.ejected && <p className="muted">Tu as été éjecté.</p>}
       </div>
-      <HoldToReveal hint="Maintenir pour voir ton rôle">
-        <RoleCard view={view} />
-      </HoldToReveal>
+      {view.stations.length > 0 && (
+        <div className="code-buttons">
+          <StationCodeEntry openStation={openStation} />
+        </div>
+      )}
+      <RolePad view={view} send={send} />
     </div>
   );
 }

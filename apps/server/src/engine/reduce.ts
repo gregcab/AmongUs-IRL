@@ -1,60 +1,38 @@
 import {
+  isStationId,
   isValidColor,
   MAX_PLAYERS,
+  STATION_LOCATION_MAX,
+  STATION_NAME_MAX,
   resolveImpostorCount,
   SKIP_VOTE,
   validateParams,
-  type ErrorCode,
-  type GameError,
   type GameState,
   type MeetingResult,
   type MeetingType,
   type Player,
-  type ServerEventName,
-  type ServerToClientPayloads,
+  type StationId,
   type Team,
   type VoteChoice,
+  type WinReason,
 } from "@among-us/shared";
-import { durationMs, isAlive, nameKey, normalizeName, phaseKey, playersInOrder } from "./state";
+import { ALL, Ctx, fail, type Outcome } from "./ctx";
+import {
+  adminRepair,
+  clearSabotage,
+  holdExpired,
+  isCritical,
+  openStation,
+  restartSabotageCooldown,
+  sabotage,
+  stationCode,
+  stationHold,
+  stationSwitch,
+} from "./sabotage";
+import { isAlive, nameKey, normalizeName, phaseKey, playersInOrder, stationLabel } from "./state";
 import { timersFromState } from "./timers";
-import type { Command, OutboundEvent, Recipient, ReduceResult, Rng } from "./types";
+import type { Command, ReduceResult, Rng } from "./types";
 import { gameOverInfo, publicResult } from "./views";
-
-const LOG_LIMIT = 300;
-
-type Outcome = GameError | "noop" | void;
-
-class Ctx {
-  readonly events: OutboundEvent[] = [];
-  constructor(
-    readonly s: GameState,
-    readonly now: number,
-    readonly rng: Rng,
-  ) {}
-
-  emit<N extends ServerEventName>(to: Recipient, name: N, payload: ServerToClientPayloads[N]): void {
-    this.events.push({ to, name, payload } as OutboundEvent);
-  }
-
-  log(text: string): void {
-    this.s.log.push({ at: this.now, text });
-    if (this.s.log.length > LOG_LIMIT) this.s.log.splice(0, this.s.log.length - LOG_LIMIT);
-  }
-
-  ms(seconds: number): number {
-    return durationMs(this.s, seconds);
-  }
-
-  player(id: string): Player | undefined {
-    return this.s.players[id];
-  }
-}
-
-function fail(code: ErrorCode, message: string): GameError {
-  return { code, message };
-}
-
-const ALL: Recipient = { group: "all" };
 
 /**
  * Pure, deterministic game engine. Never mutates `state`; a rejected or stale command
@@ -90,6 +68,16 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return arrived(c, cmd.playerId);
     case "player:vote":
       return vote(c, cmd.playerId, cmd.targetId);
+    case "player:sabotage":
+      return sabotage(c, cmd.playerId, cmd.kind);
+    case "station:open":
+      return openStation(c, cmd.playerId, cmd.stationId);
+    case "station:hold":
+      return stationHold(c, cmd.playerId, cmd.stationId, cmd.holding);
+    case "station:code":
+      return stationCode(c, cmd.playerId, cmd.stationId, cmd.code);
+    case "station:switch":
+      return stationSwitch(c, cmd.playerId, cmd.stationId, cmd.index);
     case "admin:updateParams":
       return updateParams(c, cmd.params);
     case "admin:kick":
@@ -110,12 +98,20 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return adminEndGame(c, cmd.winner);
     case "admin:backToLobby":
       return backToLobby(c);
+    case "admin:updateStation":
+      return updateStation(c, cmd.stationId, cmd.name, cmd.location);
+    case "admin:repairSabotage":
+      return adminRepair(c);
     case "tick:phaseEnd":
       return cmd.key === phaseKey(c.s) ? advance(c) : "noop";
     case "tick:deathEffective":
       return deathEffective(c, cmd.playerId, cmd.at);
     case "tick:killReady":
       return killReady(c, cmd.at);
+    case "tick:sabotageDeadline":
+      return sabotageDeadline(c, cmd.at);
+    case "tick:holdExpired":
+      return holdExpired(c, cmd.stationId, cmd.playerId, cmd.until);
   }
 }
 
@@ -234,6 +230,21 @@ function rename(c: Ctx, playerId: string, rawName: string): Outcome {
   if (c.s.phase === "LOBBY") emitLobby(c);
 }
 
+function updateStation(c: Ctx, stationId: StationId, rawName: string, rawLocation: string): Outcome {
+  if (!isStationId(stationId)) return fail("BAD_REQUEST", "Station inconnue");
+  const clean = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").trim().replace(/\s+/g, " ") : null);
+  const name = clean(rawName);
+  const location = clean(rawLocation);
+  if (name === null || location === null) return fail("BAD_REQUEST", "Nom ou lieu invalide");
+  if ([...name].length > STATION_NAME_MAX) return fail("BAD_REQUEST", `Nom trop long (${STATION_NAME_MAX} caractères max)`);
+  if ([...location].length > STATION_LOCATION_MAX) return fail("BAD_REQUEST", `Lieu trop long (${STATION_LOCATION_MAX} caractères max)`);
+  const setup = (c.s.stationSetup ??= {});
+  const before = setup[stationId];
+  if ((before?.name ?? "") === name && (before?.location ?? "") === location) return "noop";
+  setup[stationId] = { name, location };
+  c.log(`Station ${stationLabel(c.s, stationId)} mise à jour`);
+}
+
 function start(c: Ctx, force: boolean): Outcome {
   const s = c.s;
   if (s.phase !== "LOBBY") return fail("WRONG_PHASE", "La partie a déjà commencé");
@@ -274,6 +285,8 @@ function start(c: Ctx, force: boolean): Outcome {
   s.kills = [];
   s.timeline = [];
   s.winner = undefined;
+  s.winReason = undefined;
+  clearSabotage(s);
 
   for (const p of players) {
     const allies =
@@ -314,6 +327,7 @@ function advance(c: Ctx): Outcome {
     s.phaseEndsAt = undefined;
     c.log("Début du jeu");
     startCooldowns(c);
+    restartSabotageCooldown(c);
     emitPhase(c);
     return;
   }
@@ -349,6 +363,7 @@ function resumePlaying(c: Ctx): void {
   s.phaseEndsAt = undefined;
   c.log("Reprise du jeu");
   startCooldowns(c);
+  restartSabotageCooldown(c);
   emitPhase(c);
 }
 
@@ -444,6 +459,9 @@ function reportBody(c: Ctx, playerId: string, bodyOfId: string): Outcome {
   const reporter = c.player(playerId);
   if (!reporter) return fail("UNKNOWN_PLAYER", "Joueur inconnu");
   if (!isAlive(reporter)) return fail("NOT_ALLOWED", "Seuls les vivants peuvent signaler un corps");
+  if (c.s.sabotage?.kind === "lights") {
+    return fail("SABOTAGED", `Panne de courant : impossible de signaler un corps avant la réparation (${stationLabel(c.s, "electrical")})`);
+  }
   const body = c.player(bodyOfId);
   if (!body || body.status !== "BODY") return fail("INVALID_TARGET", "Ce corps ne peut plus être signalé");
   startMeeting(c, "body", reporter.id, body.id);
@@ -457,6 +475,9 @@ function emergency(c: Ctx, playerId: string): Outcome {
   if (!isAlive(p)) return fail("NOT_ALLOWED", "Les morts ne peuvent pas appeler de réunion");
   if (p.emergencyUsed >= c.s.params.emergencyMeetingsPerPlayer) {
     return fail("EMERGENCY_QUOTA", "Plus de réunion d'urgence disponible");
+  }
+  if (c.s.sabotage && isCritical(c.s.sabotage.kind)) {
+    return fail("SABOTAGED", "Bouton bloqué pendant un sabotage critique : réparez d'abord");
   }
   const readyAt = c.s.emergencyCooldownEndsAt ?? 0;
   if (c.now < readyAt) {
@@ -486,6 +507,8 @@ function startMeeting(c: Ctx, type: MeetingType, reporterId?: string, bodyOfId?:
   for (const p of players) if (p.status === "BODY") p.status = "GHOST";
   s.killCooldownEndsAt = undefined;
   s.killReadyNotified = false;
+  if (s.sabotage) c.log("Sabotage annulé par la réunion");
+  clearSabotage(s);
 
   const meeting = {
     id: c.rng.id(),
@@ -608,7 +631,7 @@ function resolveVote(c: Ctx): void {
 // End of game
 // ---------------------------------------------------------------------------
 
-type WinCondition = (s: GameState) => Team | null;
+type WinCondition = (s: GameState) => { winner: Team; reason: WinReason } | null;
 
 function aliveCounts(s: GameState): { impostors: number; crew: number } {
   let impostors = 0;
@@ -623,10 +646,10 @@ function aliveCounts(s: GameState): { impostors: number; crew: number } {
 
 /** Evaluated in order; a "all tasks done" condition will plug in here. */
 const WIN_CONDITIONS: WinCondition[] = [
-  (s) => (aliveCounts(s).impostors === 0 ? "crew" : null),
+  (s) => (aliveCounts(s).impostors === 0 ? { winner: "crew", reason: "impostorsOut" } : null),
   (s) => {
     const { impostors, crew } = aliveCounts(s);
-    return impostors >= crew ? "impostors" : null;
+    return impostors >= crew ? { winner: "impostors", reason: "parity" } : null;
   },
 ];
 
@@ -634,25 +657,35 @@ const WIN_CONDITIONS: WinCondition[] = [
 function checkWin(c: Ctx): boolean {
   if (c.s.phase !== "PLAYING" && c.s.phase !== "MEETING") return false;
   for (const condition of WIN_CONDITIONS) {
-    const winner = condition(c.s);
-    if (winner) {
-      endGame(c, winner);
+    const win = condition(c.s);
+    if (win) {
+      endGame(c, win.winner, win.reason);
       return true;
     }
   }
   return false;
 }
 
-function endGame(c: Ctx, winner: Team): void {
+/** A critical sabotage left unrepaired: the impostors win. */
+function sabotageDeadline(c: Ctx, at: number): Outcome {
+  const active = c.s.sabotage;
+  if (c.s.phase !== "PLAYING" || !active || active.endsAt !== at) return "noop";
+  c.log(active.kind === "reactor" ? "Le réacteur a fondu" : "Plus d'oxygène");
+  endGame(c, "impostors", active.kind === "reactor" ? "reactor" : "oxygen");
+}
+
+function endGame(c: Ctx, winner: Team, reason: WinReason): void {
   const s = c.s;
   if (s.meeting) s.meetingHistory.push(s.meeting);
   s.meeting = undefined;
   s.phase = "GAME_OVER";
   s.winner = winner;
+  s.winReason = reason;
   s.phaseEndsAt = undefined;
   s.killCooldownEndsAt = undefined;
   s.killReadyNotified = false;
   s.emergencyCooldownEndsAt = undefined;
+  clearSabotage(s);
   c.log(`Victoire ${winner === "crew" ? "des équipiers" : "des imposteurs"}`);
   emitPhase(c);
   c.emit(ALL, "game:over", gameOverInfo(s)!);
@@ -664,7 +697,7 @@ function adminEndGame(c: Ctx, winner: Team): Outcome {
   }
   if (winner !== "crew" && winner !== "impostors") return fail("BAD_REQUEST", "Vainqueur invalide");
   c.log("Fin de partie décidée par le MJ");
-  endGame(c, winner);
+  endGame(c, winner, "admin");
 }
 
 function backToLobby(c: Ctx): Outcome {
@@ -686,11 +719,13 @@ function backToLobby(c: Ctx): Outcome {
   s.kills = [];
   s.timeline = [];
   s.winner = undefined;
+  s.winReason = undefined;
   s.startedAt = undefined;
   s.phaseEndsAt = undefined;
   s.killCooldownEndsAt = undefined;
   s.killReadyNotified = false;
   s.emergencyCooldownEndsAt = undefined;
+  clearSabotage(s);
   c.log(aborted ? "Partie annulée par le MJ, retour au lobby" : "Retour au lobby");
   emitPhase(c);
   emitLobby(c);

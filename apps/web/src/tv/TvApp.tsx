@@ -1,14 +1,16 @@
-import type { PublicMeeting, PublicPlayer, ServerToClientPayloads, TvView } from "@among-us/shared";
+import { CRITICAL_SABOTAGES, type PublicMeeting, type PublicPlayer, type SabotageKind, type ServerToClientPayloads, type TvView } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { playAlarm, playVictory, unlockAudio } from "../lib/audio";
+import { playAlarm, playPowerDown, playRepaired, playSabotageAlarm, playVictory, unlockAudio } from "../lib/audio";
 import { AlarmOverlay, GameOverBlock, meetingReason, ResultBlock, SUBPHASE_LABEL, type AlarmInfo } from "../lib/game";
 import { useGameConnection } from "../lib/socket";
 import { Crewmate } from "../lib/crewmate";
+import { SabotageAlert, SabotageInfo } from "../lib/stations";
 import { ConnectionBanner, Countdown, Logo, QrCode } from "../lib/ui";
 import "./tv.css";
 
 export function TvApp() {
   const [alarm, setAlarm] = useState<AlarmInfo | null>(null);
+  const [sabotageAlert, setSabotageAlert] = useState<SabotageKind | null>(null);
   const [soundOn, setSoundOn] = useState(false);
   /** Keeps the last vote result on screen for a moment when the game ends right after it. */
   const [lingeringResult, setLingeringResult] = useState<PublicMeeting | null>(null);
@@ -21,6 +23,14 @@ export function TvApp() {
     } else if (name === "meeting:result") {
       const meeting = viewRef.current?.meeting;
       if (meeting) setLingeringResult({ ...meeting, subPhase: "RESULT", result: payload as ServerToClientPayloads["meeting:result"] });
+    } else if (name === "sabotage:started") {
+      const { kind } = payload as ServerToClientPayloads["sabotage:started"];
+      if (kind === "lights") playPowerDown();
+      else playSabotageAlarm();
+      setSabotageAlert(kind);
+    } else if (name === "sabotage:repaired") {
+      playRepaired();
+      setSabotageAlert(null);
     } else if (name === "game:over") {
       playVictory();
     }
@@ -42,10 +52,25 @@ export function TvApp() {
     return () => clearTimeout(t);
   }, [lingeringResult]);
 
+  useEffect(() => {
+    if (!sabotageAlert) return;
+    const t = setTimeout(() => setSabotageAlert(null), 4000);
+    return () => clearTimeout(t);
+  }, [sabotageAlert]);
+
+  // The klaxon keeps sounding on the TV while a critical sabotage runs.
+  const critical = tv?.sabotage && CRITICAL_SABOTAGES.includes(tv.sabotage.kind) ? tv.sabotage.id : null;
+  useEffect(() => {
+    if (!critical) return;
+    const id = setInterval(playSabotageAlarm, 6000);
+    return () => clearInterval(id);
+  }, [critical]);
+
   return (
     <div className="tv">
       <ConnectionBanner connected={connected} />
       {tv && <TvContent view={tv} lingeringResult={lingeringResult} />}
+      {sabotageAlert && !alarm && <SabotageAlert kind={sabotageAlert} />}
       {alarm && <AlarmOverlay alarm={alarm} players={tv?.players ?? []} large />}
       {!soundOn && (
         <button
@@ -88,7 +113,11 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
         </div>
       );
     case "PLAYING":
-      return (
+      return view.sabotage ? (
+        <div className={`tv-center tv-sabotage tv-sabotage-${view.sabotage.kind}`}>
+          <SabotageInfo sabotage={view.sabotage} stations={view.stations} large />
+        </div>
+      ) : (
         <div className="tv-center tv-calm">
           <div className="tv-huge">Partie en cours</div>
           <p className="tv-sub">En cas de réunion, rendez-vous au point de rassemblement</p>

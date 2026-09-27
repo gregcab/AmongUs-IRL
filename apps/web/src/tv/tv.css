@@ -291,3 +291,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+.tv-sabotage {
+  background: radial-gradient(ellipse at 50% 40%, rgba(255, 40, 50, 0.35), transparent 70%);
+  animation: tv-sabotage-pulse 1.4s ease-in-out infinite;
+}
+
+.tv-sabotage-lights {
+  background: rgba(0, 0, 0, 0.55);
+  animation: none;
+}
+
+@keyframes tv-sabotage-pulse {
+  50% {
+    background-color: rgba(120, 0, 10, 0.25);
+  }
+}
+
+.tv-sabotage .sabotage-info {
+  width: min(1200px, 100%);
+  text-align: left;
+}
+
+.tv .sabotage-alert-eyebrow {
+  font-size: 2rem;
+}
+
+.tv .sabotage-alert-title {
+  font-size: 7rem;
+}
+

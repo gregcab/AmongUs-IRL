@@ -1,4 +1,4 @@
-import { PARAM_BOUNDS, type GameParams } from "@among-us/shared";
+import { PARAM_BOUNDS, SABOTAGE_KINDS, SABOTAGE_LABEL, type GameParams } from "@among-us/shared";
 import { useEffect, useState } from "react";
 
 const NUMERIC: { key: keyof typeof PARAM_BOUNDS; label: string }[] = [
@@ -13,6 +13,11 @@ const NUMERIC: { key: keyof typeof PARAM_BOUNDS; label: string }[] = [
   { key: "discussionSeconds", label: "Discussion (s)" },
   { key: "votingSeconds", label: "Vote (s)" },
   { key: "resumeCountdownSeconds", label: "Dispersion avant reprise (s)" },
+];
+
+const SABOTAGE_NUMERIC: { key: keyof typeof PARAM_BOUNDS; label: string }[] = [
+  { key: "sabotageCriticalSeconds", label: "Compte à rebours critique (s)" },
+  { key: "sabotageCooldownSeconds", label: "Délai entre deux sabotages (s)" },
 ];
 
 export function ParamsForm({ params, onSave }: { params: GameParams; onSave: (p: Partial<GameParams>) => Promise<boolean> }) {
@@ -52,17 +57,7 @@ export function ParamsForm({ params, onSave }: { params: GameParams; onSave: (p:
         </select>
       </label>
       {NUMERIC.map(({ key, label }) => (
-        <label key={key}>
-          <span>{label}</span>
-          <input
-            className="input"
-            type="number"
-            min={PARAM_BOUNDS[key][0]}
-            max={PARAM_BOUNDS[key][1]}
-            value={draft[key]}
-            onChange={(e) => update(key, Number(e.target.value))}
-          />
-        </label>
+        <NumberField key={key} field={key} label={label} value={draft[key]} onChange={(v) => update(key, v)} />
       ))}
       <label>
         <span>Fantômes pendant les réunions</span>
@@ -79,6 +74,21 @@ export function ParamsForm({ params, onSave }: { params: GameParams; onSave: (p:
         <input type="checkbox" checked={draft.anonymousVotes} onChange={(e) => update("anonymousVotes", e.target.checked)} />
         <span>Votes anonymes</span>
       </label>
+
+      <h4>Sabotages</h4>
+      {SABOTAGE_KINDS.map((kind) => (
+        <label key={kind} className="checkbox">
+          <input
+            type="checkbox"
+            checked={draft.enabledSabotages.includes(kind)}
+            onChange={(e) => update("enabledSabotages", toggle(draft.enabledSabotages, kind, e.target.checked, SABOTAGE_KINDS))}
+          />
+          <span>{SABOTAGE_LABEL[kind]}</span>
+        </label>
+      ))}
+      {SABOTAGE_NUMERIC.map(({ key, label }) => (
+        <NumberField key={key} field={key} label={label} value={draft[key]} onChange={(v) => update(key, v)} />
+      ))}
       <div className="row">
         <button className="btn" disabled={!dirty}>
           Enregistrer
@@ -99,3 +109,18 @@ export function ParamsForm({ params, onSave }: { params: GameParams; onSave: (p:
     </form>
   );
 }
+
+function NumberField({ field, label, value, onChange }: { field: keyof typeof PARAM_BOUNDS; label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input className="input" type="number" min={PARAM_BOUNDS[field][0]} max={PARAM_BOUNDS[field][1]} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
+/** Adds or removes `item`, keeping the catalog order. */
+function toggle<T extends string>(list: readonly T[], item: T, on: boolean, order: readonly T[]): T[] {
+  return order.filter((x) => (x === item ? on : list.includes(x)));
+}
+

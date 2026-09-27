@@ -1,4 +1,4 @@
-import type { GameState } from "@among-us/shared";
+import type { GameState, StationId } from "@among-us/shared";
 import { phaseKey } from "./state";
 import type { TimerRequest } from "./types";
 
@@ -23,6 +23,15 @@ export function timersFromState(s: GameState): TimerRequest[] {
     }
     if (s.killCooldownEndsAt !== undefined && !s.killReadyNotified) {
       timers.push({ id: "killReady", at: s.killCooldownEndsAt, command: { type: "tick:killReady", at: s.killCooldownEndsAt } });
+    }
+    const deadline = s.sabotage?.endsAt;
+    if (deadline !== undefined) {
+      timers.push({ id: "sabotage", at: deadline, command: { type: "tick:sabotageDeadline", at: deadline } });
+    }
+    for (const [stationId, holders] of Object.entries(s.holds ?? {}) as [StationId, Record<string, number>][]) {
+      for (const [playerId, until] of Object.entries(holders)) {
+        timers.push({ id: `hold:${stationId}:${playerId}`, at: until, command: { type: "tick:holdExpired", stationId, playerId, until } });
+      }
     }
   }
   return timers;

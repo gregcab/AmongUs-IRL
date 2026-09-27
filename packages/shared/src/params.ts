@@ -1,3 +1,4 @@
+import { SABOTAGE_KINDS, type SabotageKind } from "./stations";
 import type { GhostMeetingMode } from "./types";
 
 export interface GameParams {
@@ -18,6 +19,11 @@ export interface GameParams {
   anonymousVotes: boolean;
   /** Reserved for tasks (out of MVP scope). */
   freezeTasksDuringMeeting: boolean;
+  /** Countdown of the critical sabotages (reactor, oxygen). */
+  sabotageCriticalSeconds: number;
+  /** Cooldown shared by the impostors, restarted after each sabotage and each meeting. */
+  sabotageCooldownSeconds: number;
+  enabledSabotages: SabotageKind[];
 }
 
 export const DEFAULT_PARAMS: GameParams = {
@@ -37,6 +43,9 @@ export const DEFAULT_PARAMS: GameParams = {
   confirmEjects: true,
   anonymousVotes: false,
   freezeTasksDuringMeeting: true,
+  sabotageCriticalSeconds: 60,
+  sabotageCooldownSeconds: 90,
+  enabledSabotages: [...SABOTAGE_KINDS],
 };
 
 type NumericKey = {
@@ -55,6 +64,8 @@ export const PARAM_BOUNDS: Record<NumericKey, [min: number, max: number]> = {
   discussionSeconds: [10, 900],
   votingSeconds: [10, 600],
   resumeCountdownSeconds: [3, 120],
+  sabotageCriticalSeconds: [15, 600],
+  sabotageCooldownSeconds: [5, 900],
 };
 
 export const MAX_IMPOSTORS = 5;
@@ -104,9 +115,21 @@ export function validateParams(base: GameParams, update: unknown): ParamsValidat
         if (typeof value === "boolean") next[key] = value;
         else errors.push(`${key} doit être un booléen`);
         break;
+      case "enabledSabotages": {
+        const list = subsetOf(SABOTAGE_KINDS, value);
+        if (list) next.enabledSabotages = list;
+        else errors.push("enabledSabotages doit être une liste de sabotages connus");
+        break;
+      }
     }
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, params: next };
+}
+
+/** `value` as a duplicate-free list of `allowed` items, in catalog order, or null. */
+function subsetOf<T extends string>(allowed: readonly T[], value: unknown): T[] | null {
+  if (!Array.isArray(value) || !value.every((v) => allowed.includes(v as T))) return null;
+  return allowed.filter((a) => value.includes(a));
 }
 
 /** Number of impostors for `playerCount` players, or null if the configuration is invalid. */

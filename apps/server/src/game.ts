@@ -1,5 +1,5 @@
 import { DEFAULT_PARAMS, type GameState } from "@among-us/shared";
-import { createInitialState, reduce, timersFromState, type Command, type ReduceResult, type Rng } from "./engine";
+import { createInitialState, reduce, timersFromState, upgradeState, type Command, type ReduceResult, type Rng } from "./engine";
 import type { Persistence } from "./persistence";
 import { Scheduler } from "./scheduler";
 
@@ -21,7 +21,7 @@ export class GameRuntime {
     timeScale: number,
   ) {
     const restored = persistence.loadSnapshot();
-    this.current = restored ?? createInitialState(rng.id(), DEFAULT_PARAMS, timeScale);
+    this.current = restored ? upgradeState(restored) : createInitialState(rng.id(), DEFAULT_PARAMS, timeScale);
     this.current.timeScale = timeScale;
     // Nobody is connected right after a (re)start.
     for (const p of Object.values(this.current.players)) p.connected = false;

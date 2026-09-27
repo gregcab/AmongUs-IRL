@@ -95,7 +95,7 @@ export function ScanPage({ type, token }: { type: ScanType; token: string }) {
           <div className="big">Ouvrez ce lien dans le navigateur avec lequel vous avez rejoint la partie</div>
           {type === "report" && (
             <p className="muted">
-              Plus simple : dans le jeu, touchez « Signaler un corps avec son code » et tapez les 4 chiffres affichés sous le QR du corps.
+              Plus simple : dans le jeu, touchez « Code d'un corps » et tapez les 4 chiffres affichés sous le QR du corps.
             </p>
           )}
           {type === "practice" && (

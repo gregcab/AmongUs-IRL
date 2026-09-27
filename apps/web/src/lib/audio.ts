@@ -61,3 +61,39 @@ export function playAlarm(): void {
 export function playVictory(): void {
   [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.18, 0.3, 0.4, "triangle"));
 }
+
+/** Critical sabotage: fast rising "whoop" klaxon (~2.4 s). */
+export function playSabotageAlarm(): void {
+  const c = context();
+  if (!c) return;
+  if (c.state === "suspended") void c.resume();
+  for (let i = 0; i < 4; i++) {
+    const start = c.currentTime + i * 0.6;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(420, start);
+    osc.frequency.exponentialRampToValueAtTime(1100, start + 0.45);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.45, start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+    osc.connect(gain).connect(c.destination);
+    osc.start(start);
+    osc.stop(start + 0.55);
+  }
+}
+
+/** Blackout: descending tones. */
+export function playPowerDown(): void {
+  [660, 440, 262].forEach((f, i) => tone(f, i * 0.22, 0.3, 0.35, "triangle"));
+}
+
+export function playRepaired(): void {
+  [523, 784].forEach((f, i) => tone(f, i * 0.12, 0.2, 0.3, "sine"));
+}
+
+/** Short click for switches and pads. */
+export function playClick(): void {
+  tone(1200, 0, 0.05, 0.15, "square");
+}
+

@@ -551,3 +551,183 @@ describe("admin", () => {
     expect(JSON.stringify(h.state)).toBe(snapshot);
   });
 });
+
+describe("sabotage", () => {
+  const SAB = { ...FAST, sabotageCooldownSeconds: 20, sabotageCriticalSeconds: 60 };
+
+  function playing(n = 7, params = {}) {
+    const h = new Harness({ ...SAB, ...params });
+    const roles = h.startGame(n);
+    return { h, ...roles };
+  }
+
+  it("is only for impostors, ghosts included, once the shared cooldown is over", () => {
+    const { h, impostors, crew } = playing();
+    expect(h.state.sabotageCooldownEndsAt).toBe(h.now + 20_000);
+    expect(h.try({ type: "player:sabotage", playerId: impostors[0]!, kind: "lights" }).error?.code).toBe("SABOTAGE_UNAVAILABLE");
+    h.seconds(20);
+    expect(h.try({ type: "player:sabotage", playerId: crew[0]!, kind: "lights" }).error?.code).toBe("NOT_ALLOWED");
+    h.do({ type: "admin:declareDeath", playerId: impostors[0]! });
+    h.clearEvents();
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "lights" }); // a dead impostor still sabotages
+    expect(h.events.find((e) => e.name === "sabotage:started")).toEqual({ to: { group: "all" }, name: "sabotage:started", payload: { kind: "lights", endsAt: undefined } });
+    expect(h.try({ type: "player:sabotage", playerId: impostors[1]!, kind: "reactor" }).error?.message).toMatch(/déjà en cours/);
+  });
+
+  it("respects the enabled sabotages", () => {
+    const { h, impostors } = playing(7, { enabledSabotages: ["lights"] });
+    h.seconds(20);
+    expect(h.try({ type: "player:sabotage", playerId: impostors[0]!, kind: "reactor" }).error?.message).toMatch(/désactivé/);
+  });
+
+  it("repairs the reactor when two players hold both stations at the same time", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "reactor" });
+    expect(h.state.sabotage?.endsAt).toBe(h.now + 60_000);
+    // One player cannot hold both stations.
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-a", holding: true });
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-b", holding: true });
+    expect(h.state.sabotage).toBeDefined();
+    expect(playerView(h.state, crew[1]!).sabotage?.held).toEqual(["reactor-b"]);
+    // A released finger no longer counts, nor does a hold without heartbeat.
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-b", holding: false });
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-a", holding: true });
+    h.seconds(5);
+    expect(h.state.holds?.["reactor-a"]).toEqual({});
+    h.do({ type: "station:hold", playerId: crew[1]!, stationId: "reactor-b", holding: true });
+    expect(h.state.sabotage).toBeDefined();
+    h.clearEvents();
+    h.do({ type: "station:hold", playerId: impostors[1]!, stationId: "reactor-a", holding: true }); // impostors may help
+    expect(h.state.sabotage).toBeUndefined();
+    expect(h.events.map((e) => e.name)).toEqual(["sabotage:repaired"]);
+    expect(h.state.sabotageCooldownEndsAt).toBe(h.now + 20_000);
+    expect(timersFromState(h.state).map((t) => t.id)).not.toContain("sabotage");
+  });
+
+  it("lets the impostors win when a critical sabotage is not repaired in time", () => {
+    const { h, impostors } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "oxygen" });
+    h.seconds(59.9);
+    expect(h.state.phase).toBe("PLAYING");
+    h.seconds(0.1);
+    expect(h.state.phase).toBe("GAME_OVER");
+    expect(h.state.winner).toBe("impostors");
+    expect(playerView(h.state, impostors[0]!).gameOver?.reason).toBe("oxygen");
+    expect(h.state.sabotage).toBeUndefined();
+  });
+
+  it("repairs oxygen with the two codes read at the admin station", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "oxygen" });
+    const codes = h.state.sabotage!.codes!;
+    expect(codes["o2-a"]).toMatch(/^\d{4}$/);
+    expect(codes["o2-b"]).not.toBe(codes["o2-a"]);
+    // Codes are only shown to players who opened the admin station.
+    expect(JSON.stringify(playerView(h.state, crew[0]!))).not.toContain(codes["o2-a"]!);
+    expect(JSON.stringify(tvView(h.state, "http://x"))).not.toContain(codes["o2-a"]!);
+    h.do({ type: "station:open", playerId: crew[0]!, stationId: "admin" });
+    expect(playerView(h.state, crew[0]!).sabotage?.codes).toEqual(codes);
+    expect(playerView(h.state, crew[1]!).sabotage?.codes).toBeUndefined();
+
+    const wrong = String((Number(codes["o2-a"]) + 1) % 10000).padStart(4, "0");
+    expect(h.try({ type: "station:code", playerId: crew[0]!, stationId: "o2-a", code: wrong }).error?.code).toBe("WRONG_CODE");
+    expect(h.try({ type: "station:code", playerId: crew[0]!, stationId: "o2-a", code: codes["o2-b"]! }).error?.code).toBe("WRONG_CODE");
+    expect(h.try({ type: "station:code", playerId: crew[0]!, stationId: "admin", code: codes["o2-a"]! }).error?.code).toBe("WRONG_STATION");
+    h.do({ type: "station:code", playerId: crew[0]!, stationId: "o2-a", code: codes["o2-a"]! });
+    expect(playerView(h.state, crew[1]!).sabotage?.entered).toEqual(["o2-a"]);
+    h.do({ type: "station:code", playerId: crew[1]!, stationId: "o2-b", code: ` ${codes["o2-b"]} ` });
+    expect(h.state.sabotage).toBeUndefined();
+  });
+
+  it("blocks body reports during a blackout until the switches are all on", () => {
+    const { h, impostors, crew } = playing();
+    h.kill(crew[0]!);
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "lights" });
+    const report = h.try({ type: "player:reportBody", playerId: crew[1]!, bodyOfId: crew[0]! });
+    expect(report.error?.code).toBe("SABOTAGED");
+    h.do({ type: "player:emergency", playerId: crew[2]! }); // not critical: the button still works
+    expect(h.state.phase).toBe("MEETING");
+  });
+
+  it("repairs the lights by flipping every switch on, ghosts excluded", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "lights" });
+    const switches = h.state.sabotage!.switches!;
+    expect(switches.filter((on) => !on).length).toBeGreaterThanOrEqual(2);
+    expect(h.try({ type: "station:switch", playerId: crew[0]!, stationId: "reactor-a", index: 0 }).error?.code).toBe("WRONG_STATION");
+    expect(h.try({ type: "station:switch", playerId: crew[0]!, stationId: "electrical", index: 9 }).error?.code).toBe("BAD_REQUEST");
+    h.do({ type: "admin:declareDeath", playerId: crew[3]! });
+    expect(h.try({ type: "station:switch", playerId: crew[3]!, stationId: "electrical", index: 0 }).error?.code).toBe("NOT_ALLOWED");
+    switches.forEach((on, i) => {
+      if (!on) h.do({ type: "station:switch", playerId: crew[0]!, stationId: "electrical", index: i });
+    });
+    expect(h.state.sabotage).toBeUndefined();
+    expect(h.try({ type: "player:reportBody", playerId: crew[1]!, bodyOfId: crew[3]! }).error).toBeUndefined();
+  });
+
+  it("blocks the emergency button during a critical sabotage; any meeting cancels the sabotage", () => {
+    const { h, impostors, crew } = playing(7, { resumeCountdownSeconds: 5 });
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "reactor" });
+    expect(h.try({ type: "player:emergency", playerId: crew[0]! }).error?.code).toBe("SABOTAGED");
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-a", holding: true });
+    h.kill(crew[1]!);
+    h.do({ type: "player:reportBody", playerId: crew[2]!, bodyOfId: crew[1]! });
+    expect(h.state.sabotage).toBeUndefined();
+    expect(h.state.holds).toEqual({});
+    expect(h.state.sabotageCooldownEndsAt).toBeUndefined();
+    expect(timersFromState(h.state).map((t) => t.id)).toEqual(["phase"]);
+    for (let i = 0; i < 3; i++) h.do({ type: "admin:advancePhase" });
+    h.seconds(5);
+    expect(h.state.phase).toBe("PLAYING");
+    expect(h.state.sabotageCooldownEndsAt).toBe(h.now + 20_000);
+  });
+
+  it("never tells crewmates who sabotaged nor the impostors' cooldown", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.clearEvents();
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "reactor" });
+    for (const e of h.events) expect(JSON.stringify(e.payload)).not.toContain(impostors[0]!);
+    const crewView = playerView(h.state, crew[0]!);
+    expect(crewView.kind === "player" && crewView.sabotageCooldownEndsAt).toBeFalsy();
+    expect(JSON.stringify(crewView.sabotage)).not.toContain(impostors[0]!);
+    expect(JSON.stringify(tvView(h.state, "http://x").sabotage)).not.toContain(impostors[0]!);
+    const impView = playerView(h.state, impostors[1]!);
+    expect(impView.kind === "player" && "sabotageCooldownEndsAt" in impView).toBe(true);
+    // The same shared actions give the same answers to crewmates and impostors.
+    const a = h.try({ type: "station:hold", playerId: impostors[1]!, stationId: "reactor-a", holding: true });
+    h.do({ type: "station:hold", playerId: impostors[1]!, stationId: "reactor-a", holding: false });
+    const b = h.try({ type: "station:hold", playerId: crew[1]!, stationId: "reactor-a", holding: true });
+    expect(a.error).toBeUndefined();
+    expect(b.error).toBeUndefined();
+    expect(a.events).toEqual(b.events);
+  });
+
+  it("lets the admin repair a sabotage and rename stations", () => {
+    const { h, impostors } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "oxygen" });
+    h.do({ type: "admin:repairSabotage" });
+    expect(h.state.sabotage).toBeUndefined();
+    h.do({ type: "admin:updateStation", stationId: "electrical", name: "  Tableau  électrique ", location: "Garage" });
+    expect(playerView(h.state, impostors[0]!).stations.find((s) => s.id === "electrical")).toEqual({ id: "electrical", name: "Tableau électrique", location: "Garage" });
+    h.do({ type: "admin:updateStation", stationId: "electrical", name: "", location: "" });
+    expect(tvView(h.state, "http://x").stations.find((s) => s.id === "electrical")?.name).toBe("Électricité");
+    expect(h.try({ type: "admin:updateStation", stationId: "electrical", name: "x".repeat(31), location: "" }).error?.code).toBe("BAD_REQUEST");
+  });
+
+  it("survives a restart: sabotage deadline and holds are derived timers", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "reactor" });
+    h.do({ type: "station:hold", playerId: crew[0]!, stationId: "reactor-a", holding: true });
+    const ids = timersFromState(JSON.parse(JSON.stringify(h.state))).map((t) => t.id).sort();
+    expect(ids).toEqual(["hold:reactor-a:" + crew[0], "killReady", "sabotage"].sort());
+  });
+});

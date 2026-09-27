@@ -16,4 +16,6 @@ export const VIBRATION = {
   test: [120],
   killReady: [70, 80, 70],
   alarm: [900, 200, 900, 200, 900],
+  sabotage: [400, 150, 400, 150, 400],
+  blackout: [250, 100, 250],
 } as const;

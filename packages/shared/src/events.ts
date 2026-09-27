@@ -1,4 +1,5 @@
 import type { GameParams } from "./params";
+import type { SabotageKind, StationId } from "./stations";
 import type {
   Ally,
   ClientView,
@@ -34,6 +35,10 @@ export type ErrorCode =
   | "INVALID_TOKEN"
   | "BAD_PIN"
   | "RATE_LIMITED"
+  | "SABOTAGED"
+  | "SABOTAGE_UNAVAILABLE"
+  | "WRONG_STATION"
+  | "WRONG_CODE"
   | "BAD_REQUEST";
 
 export interface GameError {
@@ -57,6 +62,16 @@ export interface ClientToServerPayloads {
   "player:vote": { targetId: VoteChoice };
   /** Short code shown under a body's QR, typed in the app when the camera opens another browser. */
   "player:reportCode": { code: string };
+  /** Impostors only; the menu hides behind the "hold to see your role" pad. */
+  "player:sabotage": { kind: SabotageKind };
+  /** Proves the player stands at a station; the ack carries the station id. */
+  "station:open": { at: StationAccess };
+  /** Finger on (or off) a station's hold pad; repeated as a heartbeat while held. */
+  "station:hold": { at: StationAccess; holding: boolean };
+  /** Oxygen code typed at an O2 station. */
+  "station:code": { at: StationAccess; code: string };
+  /** Lights switch flipped at the electrical station. */
+  "station:switch": { at: StationAccess; index: number };
 
   "admin:auth": { pin: string };
   "admin:updateParams": { params: Partial<GameParams> };
@@ -69,7 +84,12 @@ export interface ClientToServerPayloads {
   "admin:revive": { playerId: string };
   "admin:endGame": { winner: Team };
   "admin:backToLobby": Record<string, never>;
+  "admin:updateStation": { stationId: StationId; name: string; location: string };
+  "admin:repairSabotage": Record<string, never>;
 }
+
+/** How a station command proves where the player is: the QR token, or the code printed under it. */
+export type StationAccess = { token: string } | { code: string };
 
 export type ClientEventName = keyof ClientToServerPayloads;
 
@@ -80,6 +100,7 @@ export const PLAYER_EVENTS = [
   "player:declareDeath",
   "player:arrived",
   "player:vote",
+  "player:sabotage",
 ] as const satisfies readonly ClientEventName[];
 
 export const ADMIN_EVENTS = [
@@ -93,12 +114,15 @@ export const ADMIN_EVENTS = [
   "admin:revive",
   "admin:endGame",
   "admin:backToLobby",
+  "admin:updateStation",
+  "admin:repairSabotage",
 ] as const satisfies readonly ClientEventName[];
 
 /** Ack payloads that carry data. */
 export interface AckData {
   "lobby:join": { token: string };
   "admin:auth": { adminToken: string };
+  "station:open": { stationId: StationId };
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +147,8 @@ export interface ServerToClientPayloads {
   "meeting:result": PublicMeetingResult;
   "game:over": GameOverInfo;
   "admin:deathLogged": { playerId: string; effectiveAt: number };
+  "sabotage:started": { kind: SabotageKind; endsAt?: number };
+  "sabotage:repaired": { kind: SabotageKind };
   error: { code: ErrorCode; message: string };
 }
 
@@ -134,7 +160,7 @@ export const ROUTES = {
   emergency: "/e/",
   /** Lobby scan practice shown on the TV. */
   practice: "/t/",
-  /** Reserved for tasks (out of MVP scope). */
+  /** Printed stations (sabotage repairs). */
   station: "/s/",
 } as const;
 

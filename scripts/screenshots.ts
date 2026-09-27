@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContextOptions, type Page } from "playwright-core";
-import { createApp } from "../apps/server/src/app";
+import { createApp, type App } from "../apps/server/src/app";
 import { seededRng } from "../apps/server/src/engine";
 import { TestClient } from "../apps/server/test/client";
 
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome", args: ["--autoplay-policy=no-user-gesture-required"] });
 
   try {
-    await play(browser, url, app.tokens.adminToken(PIN));
+    await play(browser, url, app);
   } finally {
     await browser.close();
     await app.close();
@@ -97,7 +97,19 @@ async function holdReveal(page: Page): Promise<void> {
   await page.locator(".reveal").first().dispatchEvent("pointerdown", { pointerId: 1 });
 }
 
-async function play(browser: Browser, url: string, adminToken: string): Promise<void> {
+/** Holds the role pad, then slides onto the hidden sabotage target and releases there. */
+async function openSabotageMenu(page: Page): Promise<void> {
+  const pad = page.locator(".reveal").first();
+  const box = (await pad.boundingBox())!;
+  await pad.dispatchEvent("pointerdown", { pointerId: 2, clientX: box.x + box.width / 2, clientY: box.y + 20 });
+  const target = (await page.locator(".sabotage-target").boundingBox())!;
+  await pad.dispatchEvent("pointerup", { pointerId: 2, clientX: target.x + target.width / 2, clientY: target.y + target.height / 2 });
+  await page.locator(".sabotage-menu").waitFor();
+}
+
+async function play(browser: Browser, url: string, app: App): Promise<void> {
+  const adminToken = app.tokens.adminToken(PIN);
+  const stationUrl = (id: string) => `${url}/s/${app.tokens.stationToken(app.runtime.state.gameId, id)}`;
   const admin = await new TestClient(url).connected();
   await admin.ok("admin:auth", { pin: PIN });
   await admin.ok("admin:updateParams", {
@@ -110,8 +122,20 @@ async function play(browser: Browser, url: string, adminToken: string): Promise<
       votingSeconds: 600,
       resumeCountdownSeconds: 120,
       emergencyCooldownSeconds: 0,
+      sabotageCooldownSeconds: 5,
+      sabotageCriticalSeconds: 600,
     },
   });
+  for (const [stationId, location] of [
+    ["reactor-a", "Garage"],
+    ["reactor-b", "Jardin"],
+    ["o2-a", "Cuisine"],
+    ["o2-b", "Chambre"],
+    ["admin", "Salon"],
+    ["electrical", "Entrée"],
+  ]) {
+    await admin.ok("admin:updateStation", { stationId, name: "", location });
+  }
 
   const bots: Bot[] = [];
   const addBot = async (name: string, color: string) => {
@@ -176,6 +200,31 @@ async function play(browser: Browser, url: string, adminToken: string): Promise<
   await phone.getByText("Partie en cours").waitFor();
   await tap(phone);
   await shot(phone, "phone-playing");
+
+  // Sabotage: the impostor's hidden menu, then the reactor alarm everywhere.
+  const saboteurPhone = await open(browser, url, PHONE, { "amongus.session": impostors[0]!.token });
+  await saboteurPhone.getByText("Partie en cours").waitFor();
+  await tap(saboteurPhone);
+  await sleep(5500); // shared sabotage cooldown
+  await openSabotageMenu(saboteurPhone);
+  await shot(saboteurPhone, "phone-sabotage-menu");
+  await saboteurPhone.getByRole("button", { name: /Réacteur/ }).click();
+  await saboteurPhone.context().close();
+  await phone.locator(".sabotage-info").waitFor();
+  await Promise.all([shot(phone, "phone-sabotage", 4200), shot(tv, "tv-sabotage", 4200)]);
+
+  // Camille runs to the left reactor station and keeps a finger on it.
+  await phone.goto(stationUrl("reactor-a"));
+  await phone.locator(".reactor-pad").waitFor();
+  await tap(phone);
+  await phone.locator(".reactor-pad").dispatchEvent("pointerdown", { pointerId: 3 });
+  await shot(phone, "phone-station-reactor");
+  const helper = crew.find((b) => b.id !== crew[0]!.id && b.id !== crew[1]!.id) ?? crew[0]!;
+  await helper.c.ok("station:hold", { at: { token: stationUrl("reactor-b").split("/s/")[1] }, holding: true });
+  await phone.getByText("Réparé").waitFor();
+  await phone.locator(".reactor-pad, .station-idle").first().waitFor();
+  await phone.getByRole("button", { name: "Retour au jeu" }).click();
+  await phone.getByText("Partie en cours").waitFor();
 
   // Kill: the victim's phone becomes the body.
   const [victim, reporter] = crew as [Bot, Bot];

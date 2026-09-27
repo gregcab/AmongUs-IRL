@@ -1,14 +1,15 @@
 /**
  * Automated Socket.IO players to test without phones.
  *
- *   pnpm simulate --players 8                 full scenario: kill, QR report, vote, until game over
+ *   pnpm simulate --players 8                 full scenario: kill, QR report, sabotage, vote, until game over
  *   pnpm simulate --players 4 --passive       bots join, get ready, arrive and vote "skip" on their own;
  *                                             the game is driven from /admin (useful with a real phone)
  *
+ * In both modes, living bots repair every sabotage (reactor, oxygen, lights) at the stations.
  * Options: --url http://localhost:8080  --pin 1234  --seed 42
  */
-import type { ClientView, PlayerView } from "../packages/shared/src/index";
-import { PLAYER_COLORS, SESSION_HEADER, SKIP_VOTE } from "../packages/shared/src/index";
+import type { ClientView, PlayerView, SabotageKind, StationId } from "../packages/shared/src/index";
+import { ADMIN_COOKIE, OXYGEN_CODE_STATIONS, PLAYER_COLORS, SABOTAGE_LABEL, SABOTAGE_STATIONS, SESSION_HEADER, SKIP_VOTE } from "../packages/shared/src/index";
 import { TestClient } from "../apps/server/test/client";
 
 function arg(name: string, fallback: string): string {
@@ -75,6 +76,59 @@ function autoMeeting(bots: Bot[], chooseVote: (bot: Bot) => string): void {
   }
 }
 
+/** Station codes printed for the current game, read from the admin's printable page. */
+async function stationCodes(admin: TestClient): Promise<Map<StationId, string>> {
+  const auth = await admin.ok<{ adminToken: string }>("admin:auth", { pin });
+  const html = await (await fetch(`${url}/api/print/stations`, { headers: { cookie: `${ADMIN_COOKIE}=${auth!.adminToken}` } })).text();
+  return new Map([...html.matchAll(/data-station="([^"]+)"[\s\S]*?Code <b>(\d{4})<\/b>/g)].map((m) => [m[1] as StationId, m[2]!]));
+}
+
+/**
+ * Living bots repair each new sabotage after a short delay, like players running to the
+ * stations: two fingers on the reactor, the O2 codes read at the admin station, the switches.
+ */
+function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>): void {
+  let handled = "";
+  const watcher = bots[0];
+  if (!watcher) return;
+  watcher.c.socket.on("state:sync", async (v: ClientView) => {
+    const sabotage = v.kind === "player" && v.phase === "PLAYING" ? v.sabotage : undefined;
+    if (!sabotage || sabotage.id === handled) return;
+    handled = sabotage.id;
+    const codes = await getCodes();
+    const at = (id: StationId) => ({ code: codes.get(id)! });
+    await sleep(1500 + random() * 2000);
+    const alive = bots.filter((b) => pv(b).phase === "PLAYING" && ["ALIVE", "DYING"].includes(status(b)));
+    const still = () => pv(watcher).sabotage?.id === sabotage.id;
+    if (alive.length === 0 || !still()) return;
+    log(`Les bots réparent : ${SABOTAGE_LABEL[sabotage.kind]}`);
+    if (sabotage.kind === "reactor") {
+      const [a, b] = [pick(alive), pick(alive)];
+      const holders = a === b ? [a] : [a, b];
+      if (holders.length < 2) return log("Un seul bot vivant : impossible de tenir les deux réacteurs");
+      const beat = setInterval(() => {
+        for (const [i, h] of holders.entries()) void h.c.send("station:hold", { at: at(SABOTAGE_STATIONS.reactor[i]!), holding: true });
+      }, 1500);
+      for (const [i, h] of holders.entries()) await h.c.send("station:hold", { at: at(SABOTAGE_STATIONS.reactor[i]!), holding: true });
+      await sleep(500);
+      clearInterval(beat);
+      for (const [i, h] of holders.entries()) await h.c.send("station:hold", { at: at(SABOTAGE_STATIONS.reactor[i]!), holding: false });
+    } else if (sabotage.kind === "oxygen") {
+      const reader = pick(alive);
+      await reader.c.ok("station:open", { at: at("admin") });
+      const read = (await reader.c.until((view) => view.kind === "player" && view.sabotage?.codes !== undefined, 5000)) as PlayerView;
+      for (const id of OXYGEN_CODE_STATIONS) {
+        await sleep(800);
+        await reader.c.send("station:code", { at: at(id), code: read.sabotage!.codes![id] });
+      }
+    } else {
+      const fixer = pick(alive);
+      const switches = pv(fixer).sabotage?.switches ?? [];
+      for (const [i, on] of switches.entries()) if (!on) await fixer.c.send("station:switch", { at: at("electrical"), index: i });
+    }
+  });
+}
+
 async function post(path: string, token: string, body: unknown) {
   const res = await fetch(url + path, {
     method: "POST",
@@ -90,6 +144,8 @@ async function runPassive(): Promise<void> {
   probe.close();
   const bots = await joinBots(view);
   autoMeeting(bots, () => SKIP_VOTE);
+  const admin = await new TestClient(url).connected();
+  autoRepair(bots, () => stationCodes(admin));
   log("Bots passifs connectés. Pilotez la partie depuis /admin. Ctrl+C pour quitter.");
   await new Promise(() => undefined);
 }
@@ -124,13 +180,29 @@ async function runScenario(): Promise<void> {
     const suspect = others.find((id) => byId.get(id) && roleOf(byId.get(id)!) === "impostor");
     return suspect && random() < 0.45 ? suspect : others.length ? pick(others) : SKIP_VOTE;
   });
+  const codes = await stationCodes(admin);
+  autoRepair(bots, async () => codes);
+  let sabotaged = false;
 
   for (let round = 1; round < 30; round++) {
     const state = await admin.until((v) => v.phase === "PLAYING" || v.phase === "GAME_OVER", 120_000);
     if (state.phase === "GAME_OVER") break;
 
+    // Once per game, an impostor bot sabotages as soon as the shared cooldown allows it.
+    const enabled = state.params.enabledSabotages;
+    const saboteur = impostors.find((b) => pv(b).sabotageCooldownEndsAt !== undefined);
+    if (!sabotaged && saboteur && enabled.length > 0) {
+      sabotaged = true;
+      await sleep(Math.max(0, pv(saboteur).sabotageCooldownEndsAt! - Date.now()) + 300);
+      const kind: SabotageKind = pick([...enabled]);
+      const res = await saboteur.c.send("player:sabotage", { kind });
+      log(res.ok ? `${saboteur.name} sabote : ${SABOTAGE_LABEL[kind]}` : `Sabotage refusé : ${res.error.message}`);
+      if (res.ok) await admin.until((v) => v.kind === "admin" && (!v.state.sabotage || v.phase !== "PLAYING"), 120_000);
+      if (admin.view?.phase !== "PLAYING") continue;
+    }
+
     // Wait for the team kill cooldown, then an impostor "touches" a crewmate.
-    await admin.until((v) => v.kind === "admin" && (v.state.killCooldownEndsAt ?? 0) <= Date.now() + 200, 120_000);
+    await sleep(Math.max(0, ((admin.view?.kind === "admin" && admin.view.state.killCooldownEndsAt) || 0) - Date.now()) + 200);
     const victims = bots.filter((b) => roleOf(b) === "crew" && status(b) === "ALIVE");
     if (victims.length === 0) break;
     const victim = pick(victims);

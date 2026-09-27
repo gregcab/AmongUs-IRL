@@ -29,6 +29,7 @@ export async function createApp(config: Config, options: AppOptions = {}) {
     adminPin: config.adminPin,
     clock,
     emergencyUrl: () => transport!.emergencyUrl(),
+    stations: () => transport!.printableStations(),
   });
   await http.ready();
   transport = new Transport(http.server, runtime, { publicUrl: config.publicUrl, adminPin: config.adminPin, tokens, clock });

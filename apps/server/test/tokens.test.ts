@@ -27,22 +27,22 @@ describe("body tokens", () => {
     expect(new Tokens("other-secret").verifyBody(valid, now, rotation)).toBeNull();
     expect(tokens.verifyBody("garbage", now, rotation)).toBeNull();
     expect(tokens.verifyBody(42, now, rotation)).toBeNull();
-    expect(tokens.verifyBody(tokens.stationToken("g"), now, rotation)).toBeNull();
+    expect(tokens.verifyBody(tokens.emergencyToken("g"), now, rotation)).toBeNull();
   });
 });
 
 describe("station and admin tokens", () => {
   const tokens = new Tokens("secret");
 
-  it("binds the station token to the game", () => {
-    expect(tokens.verifyStation(tokens.stationToken("g1"))).toEqual({ gameId: "g1" });
-    expect(tokens.verifyStation(tokens.bodyToken("g1", "p", 1))).toBeNull();
+  it("binds the emergency token to the game", () => {
+    expect(tokens.verifyEmergency(tokens.emergencyToken("g1"))).toEqual({ gameId: "g1" });
+    expect(tokens.verifyEmergency(tokens.bodyToken("g1", "p", 1))).toBeNull();
   });
 
   it("binds the practice token to the game", () => {
     expect(tokens.verifyPractice(tokens.practiceToken("g1"))).toEqual({ gameId: "g1" });
-    expect(tokens.verifyPractice(tokens.stationToken("g1"))).toBeNull();
-    expect(tokens.verifyStation(tokens.practiceToken("g1"))).toBeNull();
+    expect(tokens.verifyPractice(tokens.emergencyToken("g1"))).toBeNull();
+    expect(tokens.verifyEmergency(tokens.practiceToken("g1"))).toBeNull();
   });
 
   it("derives admin tokens from the PIN", () => {

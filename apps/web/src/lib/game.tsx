@@ -7,6 +7,7 @@ import {
   type PublicMeeting,
   type PublicPlayer,
   type Role,
+  type WinReason,
 } from "@among-us/shared";
 import { formatClock } from "./clock";
 import { Crewmate } from "./crewmate";
@@ -28,6 +29,14 @@ export const NO_EJECTION_LABEL: Record<NoEjectionReason, string> = {
   tie: "Égalité",
   skipped: "Vote passé",
   noVotes: "Aucun vote",
+};
+
+export const WIN_REASON_TEXT: Record<WinReason, string> = {
+  impostorsOut: "Tous les imposteurs ont été éliminés",
+  parity: "Les imposteurs sont aussi nombreux que les équipiers",
+  reactor: "Le réacteur a fondu",
+  oxygen: "Plus d'oxygène à bord",
+  admin: "Partie terminée par le maître du jeu",
 };
 
 export function impostorsLeftText(n: number): string {
@@ -173,6 +182,11 @@ export function GameOverBlock({ info, large }: { info: GameOverInfo; large?: boo
         <div className={`big winner-${info.winner}`} style={large ? { fontSize: "2.4rem" } : undefined}>
           {info.winner === "crew" ? "des équipiers" : "des imposteurs"}
         </div>
+        {info.reason && (
+          <div className="win-reason" style={large ? { fontSize: "1.6rem" } : undefined}>
+            {WIN_REASON_TEXT[info.reason]}
+          </div>
+        )}
         <div className="lineup">
           {winners.map((w) => (
             <Crewmate key={w.id} color={w.color} size={large ? 90 : 48} />

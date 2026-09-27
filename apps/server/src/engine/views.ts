@@ -8,9 +8,11 @@ import type {
   PublicMeeting,
   PublicMeetingResult,
   PublicPlayer,
+  PublicSabotage,
+  StationId,
   TvView,
 } from "@among-us/shared";
-import { isAlive, playersInOrder } from "./state";
+import { enabledStations, isAlive, playersInOrder } from "./state";
 
 // Every function here decides what a given client may know. Role information must only
 // reach its owner, fellow impostors, the admin, or everybody once the game is over.
@@ -62,6 +64,7 @@ export function gameOverInfo(s: GameState): GameOverInfo | undefined {
   if (s.phase !== "GAME_OVER" || !s.winner) return undefined;
   return {
     winner: s.winner,
+    reason: s.winReason,
     roles: playersInOrder(s).map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role ?? "crew" })),
     timeline: s.timeline.map((t) => ({ ...t })),
     meetings: s.meetingHistory.map((m) => ({
@@ -76,15 +79,33 @@ export function gameOverInfo(s: GameState): GameOverInfo | undefined {
   };
 }
 
+/** What everybody may know about the current sabotage; O2 codes only for `readerId`. */
+export function publicSabotage(s: GameState, readerId?: string): PublicSabotage | undefined {
+  const active = s.sabotage;
+  if (!active || s.phase !== "PLAYING") return undefined;
+  const view: PublicSabotage = { id: active.id, kind: active.kind, startedAt: active.startedAt, endsAt: active.endsAt };
+  if (active.kind === "reactor") {
+    view.held = (Object.keys(s.holds ?? {}) as StationId[]).filter((id) => Object.keys(s.holds![id] ?? {}).length > 0).sort();
+  }
+  if (active.kind === "oxygen") {
+    view.entered = [...(active.entered ?? [])];
+    if (readerId && active.codeReaders?.includes(readerId)) view.codes = { ...active.codes };
+  }
+  if (active.switches) view.switches = [...active.switches];
+  return view;
+}
+
 function baseView(s: GameState) {
   return {
     gameId: s.gameId,
     phase: s.phase,
     phaseEndsAt: s.phaseEndsAt,
-    params: { ...s.params },
+    params: structuredClone(s.params),
     players: publicPlayers(s),
     meeting: publicMeeting(s),
     gameOver: gameOverInfo(s),
+    stations: enabledStations(s),
+    sabotage: publicSabotage(s),
   };
 }
 
@@ -96,6 +117,7 @@ export function playerView(s: GameState, playerId: string): PlayerView | Anonymo
   const view: PlayerView = {
     kind: "player",
     ...baseView(s),
+    sabotage: publicSabotage(s, p.id),
     me: {
       id: p.id,
       name: p.name,
@@ -113,6 +135,7 @@ export function playerView(s: GameState, playerId: string): PlayerView | Anonymo
       .filter((o) => o.id !== p.id && o.role === "impostor")
       .map((o) => ({ id: o.id, name: o.name, color: o.color }));
     if (s.phase === "PLAYING" && isAlive(p)) view.killCooldownEndsAt = s.killCooldownEndsAt;
+    if (s.phase === "PLAYING") view.sabotageCooldownEndsAt = s.sabotageCooldownEndsAt;
   }
   if (s.phase === "PLAYING") view.emergencyCooldownEndsAt = s.emergencyCooldownEndsAt;
   return view;

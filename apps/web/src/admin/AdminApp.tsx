@@ -1,5 +1,15 @@
-import { SKIP_VOTE, type AdminView, type GameParams, type Player, type PlayerStatus, type Team } from "@among-us/shared";
-import { useCallback, useState } from "react";
+import {
+  SABOTAGE_LABEL,
+  SKIP_VOTE,
+  stationDef,
+  type AdminView,
+  type GameParams,
+  type Player,
+  type PlayerStatus,
+  type Station,
+  type Team,
+} from "@among-us/shared";
+import { useCallback, useEffect, useState } from "react";
 import { formatClock, secondsLeft, useNow } from "../lib/clock";
 import { GameOverBlock, meetingReason, NO_EJECTION_LABEL, ROLE_LABEL, SUBPHASE_LABEL } from "../lib/game";
 import { getAdminToken, setAdminToken } from "../lib/session";
@@ -103,6 +113,9 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
           <a className="btn secondary small-btn" href="/api/print/emergency" target="_blank" rel="noreferrer">
             QR d'urgence (imprimer)
           </a>
+          <a className="btn secondary small-btn" href="/api/print/stations" target="_blank" rel="noreferrer">
+            Stations (imprimer)
+          </a>
           <button className="btn secondary small-btn" onClick={onLogout}>
             Déconnexion
           </button>
@@ -147,6 +160,10 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
             <GameOverBlock info={view.gameOver} />
           </section>
         )}
+
+        <section className="panel stack admin-wide">
+          <StationsPanel stations={view.stations} send={send} />
+        </section>
 
       </div>
     </div>
@@ -205,7 +222,35 @@ function Actions({
               <strong>{secondsLeft(s.emergencyCooldownEndsAt, now)} s</strong>
             )}
           </div>
+          {s.params.enabledSabotages.length > 0 && (
+            <div>
+              Sabotage :{" "}
+              {s.sabotage ? (
+                <strong className="role-impostor">
+                  {SABOTAGE_LABEL[s.sabotage.kind]} en cours
+                  {s.sabotage.endsAt !== undefined && ` · ${secondsLeft(s.sabotage.endsAt, now)} s`}
+                  {" "}(par {s.players[s.sabotage.by]?.name ?? "?"})
+                </strong>
+              ) : s.sabotageCooldownEndsAt === undefined ? (
+                <span className="muted">{view.phase === "MEETING" ? "gelé" : "—"}</span>
+              ) : now >= s.sabotageCooldownEndsAt ? (
+                <span className="muted">disponible</span>
+              ) : (
+                <strong>{secondsLeft(s.sabotageCooldownEndsAt, now)} s</strong>
+              )}
+            </div>
+          )}
+          {s.sabotage?.codes && (
+            <div className="muted">
+              Codes O2 : {Object.entries(s.sabotage.codes).map(([id, code]) => `${id === "o2-a" ? "A" : "B"} ${code}`).join(" · ")}
+            </div>
+          )}
         </div>
+      )}
+      {view.phase === "PLAYING" && s.sabotage && (
+        <button className="btn secondary" onClick={() => confirmThen("Réparer le sabotage en cours ?", "admin:repairSabotage")}>
+          Réparer le sabotage
+        </button>
       )}
       {view.phase === "PLAYING" && (
         <button className="btn danger" onClick={() => confirmThen("Appeler une réunion maintenant ?", "admin:callMeeting", {})}>
@@ -382,3 +427,52 @@ function MeetingPanel({ view }: { view: AdminView }) {
     </>
   );
 }
+
+function StationsPanel({ stations, send }: { stations: Station[]; send: AdminSend }) {
+  return (
+    <>
+      <h3>Stations</h3>
+      {stations.length === 0 ? (
+        <p className="muted small">Aucune station : activez un sabotage dans les paramètres.</p>
+      ) : (
+        <>
+          <p className="muted small" style={{ margin: 0 }}>
+            Nom et lieu affichés aux joueurs. Réimprimez les QR après chaque « Rejouer » : ils changent à chaque partie.
+          </p>
+          <div className="stations-grid">
+            {stations.map((st) => (
+              <StationRow key={st.id} station={st} send={send} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function StationRow({ station, send }: { station: Station; send: AdminSend }) {
+  const [name, setName] = useState(station.name);
+  const [location, setLocation] = useState(station.location);
+  const dirty = name !== station.name || location !== station.location;
+  useEffect(() => {
+    setName(station.name);
+    setLocation(station.location);
+  }, [station.name, station.location]);
+  return (
+    <form
+      className="station-row"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send("admin:updateStation", { stationId: station.id, name, location });
+      }}
+    >
+      <input className="input" value={name} maxLength={30} placeholder={stationDef(station.id).name} onChange={(e) => setName(e.target.value)} aria-label="Nom" />
+      <input className="input" value={location} maxLength={40} placeholder="Lieu (ex. Garage)" onChange={(e) => setLocation(e.target.value)} aria-label="Lieu" />
+      <button className="btn secondary small-btn" disabled={!dirty}>
+        OK
+      </button>
+      <span className="muted small station-purpose">{stationDef(station.id).purpose}</span>
+    </form>
+  );
+}
+

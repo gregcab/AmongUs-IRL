@@ -1,4 +1,5 @@
 import type { GameParams } from "./params";
+import type { SabotageKind, StationId, StationSetup } from "./stations";
 
 export type Role = "crew" | "impostor";
 export type Team = "crew" | "impostors";
@@ -8,6 +9,8 @@ export type MeetingSubPhase = "GATHERING" | "DISCUSSION" | "VOTING" | "RESULT";
 export type MeetingType = "body" | "emergency" | "admin";
 export type GhostMeetingMode = "cemetery" | "spectator";
 export type VoteChoice = string; // player id or SKIP_VOTE
+/** Why the game ended. */
+export type WinReason = "impostorsOut" | "parity" | "reactor" | "oxygen" | "admin";
 export const SKIP_VOTE = "skip";
 
 export interface Player {
@@ -68,10 +71,29 @@ export interface LogEntry {
   text: string;
 }
 
-/** Reserved for tasks (out of MVP scope): a physical spot with a QR code at `/s/:token`. */
+/** A physical spot with a printed QR code at `/s/:token` (see `stations.ts`). */
 export interface Station {
-  id: string;
+  id: StationId;
   name: string;
+  location: string;
+}
+
+export interface ActiveSabotage {
+  id: string;
+  kind: SabotageKind;
+  /** Impostor who triggered it (admin only). */
+  by: string;
+  startedAt: number;
+  /** Critical sabotages only: the impostors win at this time unless it is repaired. */
+  endsAt?: number;
+  /** Oxygen: code expected at each O2 station. */
+  codes?: Partial<Record<StationId, string>>;
+  /** Oxygen: O2 stations whose code was typed. */
+  entered?: StationId[];
+  /** Oxygen: players who read the codes at the admin station. */
+  codeReaders?: string[];
+  /** Lights: switch positions; repaired when they are all on. */
+  switches?: boolean[];
 }
 
 export interface GameState {
@@ -90,9 +112,16 @@ export interface GameState {
   phaseEndsAt?: number;
   startedAt?: number;
   winner?: Team;
+  winReason?: WinReason;
   /** Dev-only multiplier applied to every game duration (1 in production). */
   timeScale: number;
   log: LogEntry[];
+  /** Game-master names and locations of the stations (kept across games). */
+  stationSetup?: Partial<Record<StationId, StationSetup>>;
+  sabotage?: ActiveSabotage;
+  sabotageCooldownEndsAt?: number;
+  /** Fingers held on a station: player id → hold expiry (renewed by heartbeats). */
+  holds?: Partial<Record<StationId, Record<string, number>>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +155,21 @@ export interface PublicMeeting {
   result?: PublicMeetingResult;
 }
 
+export interface PublicSabotage {
+  id: string;
+  kind: SabotageKind;
+  startedAt: number;
+  endsAt?: number;
+  /** Reactor: stations with a finger on them. */
+  held?: StationId[];
+  /** Oxygen: stations whose code was typed. */
+  entered?: StationId[];
+  /** Oxygen: the codes, only for a player who read them at the admin station. */
+  codes?: Partial<Record<StationId, string>>;
+  /** Lights: switch positions. */
+  switches?: boolean[];
+}
+
 export interface PublicMeetingResult {
   ejectedId: string | null;
   noEjection?: NoEjectionReason;
@@ -150,6 +194,7 @@ export interface MeetingSummary {
 
 export interface GameOverInfo {
   winner: Team;
+  reason?: WinReason;
   roles: { id: string; name: string; color: string; role: Role }[];
   timeline: TimelineEntry[];
   meetings: MeetingSummary[];
@@ -181,6 +226,9 @@ interface BaseView {
   players: PublicPlayer[];
   meeting?: PublicMeeting;
   gameOver?: GameOverInfo;
+  /** Stations used by the current settings. */
+  stations: Station[];
+  sabotage?: PublicSabotage;
 }
 
 export interface PlayerView extends BaseView {
@@ -189,6 +237,8 @@ export interface PlayerView extends BaseView {
   allies?: Ally[];
   /** Impostors only. */
   killCooldownEndsAt?: number;
+  /** Impostors only (ghosts included). */
+  sabotageCooldownEndsAt?: number;
   emergencyCooldownEndsAt?: number;
   /** Extension point for tasks (out of MVP scope). */
   tasks?: never[];

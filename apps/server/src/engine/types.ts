@@ -3,7 +3,9 @@ import type {
   GameError,
   GameParams,
   GameState,
+  SabotageKind,
   ServerEventName,
+  StationId,
   ServerToClientPayloads,
   Team,
   VoteChoice,
@@ -32,6 +34,12 @@ export type Command =
   | PlayerCommand<"player:emergency">
   /** Lobby practice QR scanned from a browser holding the player's session. */
   | PlayerCommand<"player:practiceScan">
+  | PlayerCommand<"player:sabotage", { kind: SabotageKind }>
+  // Station commands: the transport has checked the station token or code.
+  | PlayerCommand<"station:open", { stationId: StationId }>
+  | PlayerCommand<"station:hold", { stationId: StationId; holding: boolean }>
+  | PlayerCommand<"station:code", { stationId: StationId; code: string }>
+  | PlayerCommand<"station:switch", { stationId: StationId; index: number }>
   | PlayerCommand<"system:connection", { connected: boolean }>
   // Admin
   | { type: "admin:updateParams"; params: Partial<GameParams> }
@@ -44,10 +52,14 @@ export type Command =
   | { type: "admin:revive"; playerId: string }
   | { type: "admin:endGame"; winner: Team }
   | { type: "admin:backToLobby" }
+  | { type: "admin:updateStation"; stationId: StationId; name: string; location: string }
+  | { type: "admin:repairSabotage" }
   // Scheduler
   | { type: "tick:phaseEnd"; key: string }
   | { type: "tick:deathEffective"; playerId: string; at: number }
-  | { type: "tick:killReady"; at: number };
+  | { type: "tick:killReady"; at: number }
+  | { type: "tick:sabotageDeadline"; at: number }
+  | { type: "tick:holdExpired"; stationId: StationId; playerId: string; until: number };
 
 export type CommandType = Command["type"];
 export type TickCommand = Extract<Command, { type: `tick:${string}` }>;
