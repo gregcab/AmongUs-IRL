@@ -29,9 +29,13 @@ export function publicPlayers(s: GameState): PublicPlayer[] {
 
 export function publicResult(s: GameState, m: Meeting): PublicMeetingResult | undefined {
   if (!m.result) return undefined;
-  const { ejectedId } = m.result;
+  const { ejectedId, noEjection } = m.result;
   const result: PublicMeetingResult = { ejectedId };
-  if (ejectedId && s.params.confirmEjects) result.role = s.players[ejectedId]?.role;
+  if (noEjection) result.noEjection = noEjection;
+  if (ejectedId && s.params.confirmEjects) {
+    result.role = s.players[ejectedId]?.role;
+    result.impostorsLeft = Object.values(s.players).filter((p) => p.role === "impostor" && isAlive(p)).length;
+  }
   if (!s.params.anonymousVotes) result.tally = { ...m.votes };
   return result;
 }
@@ -65,6 +69,7 @@ export function gameOverInfo(s: GameState): GameOverInfo | undefined {
       bodyOfId: m.bodyOfId,
       calledAt: m.calledAt,
       ejectedId: m.result?.ejectedId,
+      noEjection: m.result?.noEjection,
       tally: m.result && !s.params.anonymousVotes ? { ...m.votes } : undefined,
     })),
   };

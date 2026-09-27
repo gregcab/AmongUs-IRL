@@ -25,8 +25,13 @@ export interface Player {
   joinedAt: number;
 }
 
+/** Why nobody was ejected: tie at the top, "skip" on top, or no vote at all. */
+export type NoEjectionReason = "tie" | "skipped" | "noVotes";
+
 export interface MeetingResult {
   ejectedId: string | null;
+  /** Set when `ejectedId` is null. */
+  noEjection?: NoEjectionReason;
 }
 
 export interface Meeting {
@@ -119,7 +124,11 @@ export interface PublicMeeting {
 
 export interface PublicMeetingResult {
   ejectedId: string | null;
+  noEjection?: NoEjectionReason;
+  /** Only with `confirmEjects`, after an ejection. */
   role?: Role;
+  /** Living impostors after the ejection; only with `confirmEjects`, after an ejection. */
+  impostorsLeft?: number;
   tally?: Record<string, VoteChoice>;
 }
 
@@ -130,6 +139,7 @@ export interface MeetingSummary {
   calledAt: number;
   /** `undefined` when the game ended before the vote. */
   ejectedId?: string | null;
+  noEjection?: NoEjectionReason;
   /** Who voted for whom; omitted when votes are anonymous. */
   tally?: Record<string, VoteChoice>;
 }

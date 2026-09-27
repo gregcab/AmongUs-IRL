@@ -1,6 +1,6 @@
 import { DEFAULT_PARAMS, resolveImpostorCount, SKIP_VOTE, validateParams } from "@among-us/shared";
 import { describe, expect, it } from "vitest";
-import { computeEjection, playerView, reduce, timersFromState, tvView } from "../src/engine";
+import { computeEjection, playerView, reduce, timersFromState, tvView, voteOutcome } from "../src/engine";
 import { Harness } from "./harness";
 
 const FAST = { roleRevealSeconds: 5, deathDelaySeconds: 10, killCooldownSeconds: 30 };
@@ -294,7 +294,7 @@ describe("meeting", () => {
     expect(h.state.meeting?.subPhase).toBe("VOTING");
     h.seconds(40);
     expect(h.state.meeting?.subPhase).toBe("RESULT");
-    expect(h.state.meeting?.result).toEqual({ ejectedId: null });
+    expect(h.state.meeting?.result).toEqual({ ejectedId: null, noEjection: "noVotes" });
     h.seconds(5);
     expect(h.state.phase).toBe("PLAYING");
   });
@@ -306,6 +306,42 @@ describe("meeting", () => {
     expect(computeEjection({ a: SKIP_VOTE, b: SKIP_VOTE, c: "y" })).toBeNull();
     expect(computeEjection({ a: SKIP_VOTE, b: "y" })).toBeNull();
     expect(computeEjection({ a: "x", b: "x", c: SKIP_VOTE })).toBe("x");
+  });
+
+  it("tells a tie, a skip and no vote apart", () => {
+    expect(voteOutcome({})).toEqual({ ejectedId: null, noEjection: "noVotes" });
+    expect(voteOutcome({ a: "x", b: "y" })).toEqual({ ejectedId: null, noEjection: "tie" });
+    expect(voteOutcome({ a: "x", b: SKIP_VOTE })).toEqual({ ejectedId: null, noEjection: "tie" });
+    expect(voteOutcome({ a: SKIP_VOTE, b: SKIP_VOTE, c: "y" })).toEqual({ ejectedId: null, noEjection: "skipped" });
+    expect(voteOutcome({ a: "x", b: "x", c: "y" })).toEqual({ ejectedId: "x" });
+  });
+
+  it("announces the remaining impostors after an ejection only with confirmEjects", () => {
+    const run = (confirmEjects: boolean, target: "crew" | "impostor") => {
+      const h = new Harness({ ...FAST, confirmEjects });
+      const { crew, impostors } = h.startGame(7); // 2 impostors
+      h.do({ type: "admin:callMeeting" });
+      h.do({ type: "admin:advancePhase" });
+      h.do({ type: "admin:advancePhase" });
+      const targetId = target === "crew" ? crew[0]! : impostors[0]!;
+      h.clearEvents();
+      for (const id of Object.keys(h.state.players)) h.do({ type: "player:vote", playerId: id, targetId });
+      const event = h.events.find((e) => e.name === "meeting:result")!;
+      return { event: event.payload, tv: tvView(h.state, "http://x").meeting?.result };
+    };
+    expect(run(true, "crew").event).toMatchObject({ role: "crew", impostorsLeft: 2 });
+    expect(run(true, "impostor").tv).toMatchObject({ role: "impostor", impostorsLeft: 1 });
+    const hidden = run(false, "impostor");
+    expect(hidden.event).not.toHaveProperty("impostorsLeft");
+    expect(hidden.tv).not.toHaveProperty("impostorsLeft");
+
+    const h = new Harness({ ...FAST, confirmEjects: true, votingSeconds: 10 });
+    h.startGame(7);
+    h.do({ type: "admin:callMeeting" });
+    h.do({ type: "admin:advancePhase" });
+    h.do({ type: "admin:advancePhase" });
+    h.seconds(10);
+    expect(tvView(h.state, "http://x").meeting?.result).toEqual({ ejectedId: null, noEjection: "noVotes", tally: {} });
   });
 
   it("validates votes, ends early and ejects to GHOST", () => {

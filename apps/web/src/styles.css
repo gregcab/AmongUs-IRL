@@ -1017,6 +1017,20 @@ a {
   }
 }
 
+.no-eject-reason {
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.impostors-left {
+  font-size: 1.3rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
 .victory {
   display: flex;
   flex-direction: column;

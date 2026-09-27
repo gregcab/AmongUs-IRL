@@ -3,6 +3,7 @@ import {
   type GameOverInfo,
   type MeetingSubPhase,
   type MeetingType,
+  type NoEjectionReason,
   type PublicMeeting,
   type PublicPlayer,
   type Role,
@@ -22,6 +23,17 @@ export const ROLE_LABEL: Record<Role, string> = {
   crew: "Équipier",
   impostor: "Imposteur",
 };
+
+export const NO_EJECTION_LABEL: Record<NoEjectionReason, string> = {
+  tie: "Égalité",
+  skipped: "Vote passé",
+  noVotes: "Aucun vote",
+};
+
+export function impostorsLeftText(n: number): string {
+  if (n === 0) return "Aucun imposteur restant";
+  return n === 1 ? "1 imposteur restant" : `${n} imposteurs restants`;
+}
 
 export function meetingReason(
   m: { type: MeetingType; reporterId?: string; bodyOfId?: string },
@@ -92,13 +104,25 @@ export function ResultBlock({ meeting, players, large }: { meeting: PublicMeetin
           {ejected.name} a été éjecté
         </div>
       ) : (
-        <div className={large ? "title" : "big"} style={large ? { fontSize: "3rem" } : undefined}>
-          Personne n'a été éjecté
-        </div>
+        <>
+          <div className={large ? "title" : "big"} style={large ? { fontSize: "3rem" } : undefined}>
+            Personne n'a été éjecté
+          </div>
+          {result.noEjection && (
+            <div className="no-eject-reason" style={large ? { fontSize: "1.8rem" } : undefined}>
+              {NO_EJECTION_LABEL[result.noEjection]}
+            </div>
+          )}
+        </>
       )}
       {ejected && result.role && (
         <div className={`big ${result.role === "impostor" ? "role-impostor" : "role-crew"}`} style={large ? { fontSize: "2rem" } : undefined}>
           {ejected.name} {result.role === "impostor" ? "était un imposteur" : "n'était pas un imposteur"}
+        </div>
+      )}
+      {ejected && result.impostorsLeft !== undefined && (
+        <div className="impostors-left" style={large ? { fontSize: "2.2rem" } : undefined}>
+          {impostorsLeftText(result.impostorsLeft)}
         </div>
       )}
       {result.tally && <Tally tally={result.tally} players={players} large={large} />}
@@ -208,7 +232,11 @@ function MeetingHistory({ info }: { info: GameOverInfo }) {
               <span className="muted countdown small">{formatClock(m.calledAt)}</span>
             </div>
             <span className="muted small">
-              {m.ejectedId === undefined ? "Partie terminée avant le vote" : ejected ? `${ejected.name} éjecté` : "Personne éjecté"}
+              {m.ejectedId === undefined
+                ? "Partie terminée avant le vote"
+                : ejected
+                  ? `${ejected.name} éjecté`
+                  : `Personne éjecté${m.noEjection ? ` (${NO_EJECTION_LABEL[m.noEjection].toLowerCase()})` : ""}`}
             </span>
             {m.tally && <Tally tally={m.tally} players={people} />}
           </div>

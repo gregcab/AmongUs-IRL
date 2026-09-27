@@ -7,6 +7,7 @@ import {
   type ErrorCode,
   type GameError,
   type GameState,
+  type MeetingResult,
   type MeetingType,
   type Player,
   type ServerEventName,
@@ -544,7 +545,7 @@ function vote(c: Ctx, playerId: string, targetId: VoteChoice): Outcome {
 }
 
 /** Relative majority; a tie at the top or "skip" on top ejects nobody. */
-export function computeEjection(votes: Record<string, VoteChoice>): string | null {
+export function voteOutcome(votes: Record<string, VoteChoice>): MeetingResult {
   const counts = new Map<VoteChoice, number>();
   for (const target of Object.values(votes)) counts.set(target, (counts.get(target) ?? 0) + 1);
   let best: VoteChoice | null = null;
@@ -559,16 +560,22 @@ export function computeEjection(votes: Record<string, VoteChoice>): string | nul
       tie = true;
     }
   }
-  if (best === null || tie || best === SKIP_VOTE) return null;
-  return best;
+  if (best === null) return { ejectedId: null, noEjection: "noVotes" };
+  if (tie) return { ejectedId: null, noEjection: "tie" };
+  if (best === SKIP_VOTE) return { ejectedId: null, noEjection: "skipped" };
+  return { ejectedId: best };
+}
+
+export function computeEjection(votes: Record<string, VoteChoice>): string | null {
+  return voteOutcome(votes).ejectedId;
 }
 
 function resolveVote(c: Ctx): void {
   const s = c.s;
   const m = s.meeting!;
-  const ejectedId = computeEjection(m.votes);
   m.subPhase = "RESULT";
-  m.result = { ejectedId };
+  m.result = voteOutcome(m.votes);
+  const { ejectedId } = m.result;
   if (ejectedId) {
     const p = s.players[ejectedId]!;
     p.status = "GHOST";

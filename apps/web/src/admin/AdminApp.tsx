@@ -1,7 +1,7 @@
 import { SKIP_VOTE, type AdminView, type GameParams, type Player, type PlayerStatus, type Team } from "@among-us/shared";
 import { useCallback, useState } from "react";
 import { formatClock, secondsLeft, useNow } from "../lib/clock";
-import { GameOverBlock, meetingReason, ROLE_LABEL, SUBPHASE_LABEL } from "../lib/game";
+import { GameOverBlock, meetingReason, NO_EJECTION_LABEL, ROLE_LABEL, SUBPHASE_LABEL } from "../lib/game";
 import { getAdminToken, setAdminToken } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { ConnectionBanner, Countdown, Logo, PlayerChip, useToast } from "../lib/ui";
@@ -356,6 +356,15 @@ function MeetingPanel({ view }: { view: AdminView }) {
       <p className="small">
         Arrivés : {meeting.arrived.length} / {alive.length} · Votes : {Object.keys(meeting.votes).length} / {alive.length}
       </p>
+      {meeting.result && (
+        <p>
+          <strong>
+            {meeting.result.ejectedId
+              ? `${name(meeting.result.ejectedId)} éjecté`
+              : `Personne éjecté${meeting.result.noEjection ? ` (${NO_EJECTION_LABEL[meeting.result.noEjection].toLowerCase()})` : ""}`}
+          </strong>
+        </p>
+      )}
       <ul className="plist small">
         {Object.entries(meeting.votes).map(([voter, target]) => (
           <li key={voter}>
