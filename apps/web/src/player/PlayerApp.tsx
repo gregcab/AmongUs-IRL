@@ -157,8 +157,10 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
     (view.phase === "PLAYING" || (view.phase === "MEETING" && !view.params.freezeTasksDuringMeeting && stationDef(station.id).task !== undefined));
   const phase = view?.phase;
   useEffect(() => {
-    if (station && !stationUsable && phase !== undefined && phase !== "PLAYING") closeStation();
-  }, [station, stationUsable, phase, closeStation]);
+    if (!station || stationUsable || phase === undefined || phase === "PLAYING") return;
+    if (phase === "LOBBY" || phase === "ROLE_REVEAL") showToast("Les stations servent pendant la partie", "info");
+    closeStation();
+  }, [station, stationUsable, phase, closeStation, showToast]);
 
   let content: React.ReactNode;
   if (!view) {

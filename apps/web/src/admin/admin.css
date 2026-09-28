@@ -131,6 +131,10 @@
   padding: 6px 10px;
 }
 
+.params-form select.input {
+  width: 190px;
+}
+
 .params-form .checkbox {
   justify-content: flex-start;
 }
