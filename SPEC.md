@@ -1,6 +1,6 @@
-# Among Us IRL : spécification du MVP
+# Among Us IRL : spécification
 
-Ce document est la référence d'implémentation du MVP. Il reprend les décisions du dossier de conception (version 0.5 du 27/09/2026). Le code, les identifiants et les noms d'événements sont en anglais ; les textes affichés aux joueurs sont en français.
+Ce document est la référence d'implémentation. Il reprend les décisions du dossier de conception (version 0.5 du 27/09/2026) pour le MVP, complétées par les stations, les sabotages et les tâches (§17 à §19). Le code, les identifiants et les noms d'événements sont en anglais ; les textes affichés aux joueurs sont en français.
 
 ## 1. Contexte
 
@@ -24,14 +24,16 @@ Le maître du jeu (MJ) **ne joue pas** : il voit tous les rôles et arbitre.
 - Réunion d'urgence par scan d'un QR code imprimé.
 - Réunion complète : rassemblement, discussion, vote, résultat, reprise.
 - Fantômes, avec deux modes paramétrables en réunion.
-- Conditions de victoire hors tâches.
+- Conditions de victoire.
 - Console MJ et écran partagé.
 - Persistance et reprise après redémarrage du serveur.
+- Entraînement au scan dans le lobby (§7.1).
+- Stations imprimées (§17), sabotages réacteur, oxygène et lumières (§18), tâches sur téléphone (§19).
 
-### Hors MVP
+### Hors périmètre
 
-- **Tâches** (conception reportée). Prévoir les points d'extension (voir §15) mais ne rien implémenter.
-- Sabotages, mini-jeux, tâches visuelles.
+- Sabotage « Comms » (reporté).
+- Tâches visuelles et tâches physiques (QR « de fin ») du catalogue `docs/propositions-taches.html`.
 - Matériel ESP32 / MQTT.
 - Désignation du tueur par la victime.
 - Pause de partie, statistiques multi-parties.
@@ -45,6 +47,9 @@ Le maître du jeu (MJ) **ne joue pas** : il voit tous les rôles et arbitre.
 | Corps (`BODY`) | Joueur mort dont le téléphone affiche le QR code de son corps |
 | Fantôme (`GHOST`) | Joueur mort après passage d'une réunion, ou éjecté |
 | Station d'urgence | QR code imprimé qui déclenche une réunion d'urgence |
+| Station | Lieu physique avec un QR code imprimé (`/s/:token`) où l'on répare un sabotage ou fait une tâche (§17) |
+| Sabotage | Panne déclenchée par un imposteur ; les sabotages critiques font gagner les imposteurs s'ils ne sont pas réparés à temps (§18) |
+| Tâche | Mini-jeu fait sur le téléphone à une station ; les tâches des équipiers remplissent la barre de progression (§19) |
 | Point de rassemblement | Lieu physique des réunions |
 | Cimetière | Lieu physique où attendent les fantômes pendant les réunions (mode `cemetery`) |
 
@@ -86,9 +91,11 @@ among-us-irl/
 ├── packages/shared/src/
 │   ├── types.ts          # Game, Player, Meeting, Vote, KillEvent…
 │   ├── params.ts         # GameParams + valeurs par défaut + validation
-│   └── events.ts         # noms d'événements et charges utiles typées
+│   ├── events.ts         # noms d'événements et charges utiles typées
+│   ├── stations.ts       # catalogue des stations, sabotages
+│   └── tasks.ts          # catalogue des tâches
 ├── apps/server/src/
-│   ├── engine/           # cœur de jeu pur (voir §6)
+│   ├── engine/           # cœur de jeu pur (voir §6) : reduce, sabotage, tasks, views, timers
 │   ├── scheduler.ts      # timers → commandes "tick"
 │   ├── transport/        # Socket.IO, routes REST, rooms
 │   ├── auth.ts           # sessions joueurs, code admin
@@ -163,6 +170,7 @@ Chaque commande acceptée est ajoutée au journal SQLite, et l'état complet est
 3. Le joueur ouvre `/`, saisit un pseudo (1 à 16 caractères, unique, sans tenir compte de la casse) et choisit une couleur libre parmi une palette de 15 couleurs nettement distinctes. Les couleurs prises sont grisées. Il peut changer de couleur tant qu'il est en lobby.
 4. Le serveur crée une session et renvoie un jeton, stocké en `localStorage` et en cookie. À chaque connexion, le client présente son jeton et reçoit l'état complet qui le concerne.
 5. Bouton **« Je suis prêt »** : débloque l'audio (lecture d'un son court), teste la vibration quand elle existe, active le maintien de l'écran allumé (§12), affiche les consignes (luminosité au maximum, ne pas verrouiller, les fantômes ne parlent jamais aux vivants). Le joueur passe `ready`.
+5 bis. **Entraînement au scan** : la TV affiche un petit QR d'essai `PUBLIC_URL/t/<token>` (jeton HMAC lié à la partie). Le joueur le scanne avec l'appareil photo natif ; la page vérifie que ce navigateur a bien sa session (`POST /api/practice`) et le marque `scanOk` : « scan OK ✓ » sur son téléphone, à côté de son nom sur la TV du lobby et dans la console MJ. Sans session, la page affiche le même message que `/r/:token`, plus le conseil de rejoindre la partie avec le navigateur par défaut du téléphone (celui qu'ouvre l'appareil photo). `scanOk` est conservé d'une partie à l'autre ; le QR d'essai n'est accepté que dans le lobby.
 6. Le MJ peut exclure ou renommer un joueur.
 7. `admin:start` est accepté si : phase `LOBBY`, au moins `minPlayers` joueurs, et `impostorCount` valide. Les joueurs non prêts bloquent le lancement sauf si le MJ force (`{ force: true }`).
 8. Nombre d'imposteurs : si `impostorCount = "auto"`, 1 pour 4 à 6 joueurs, 2 pour 7 à 9, 3 au-delà. Refuser toute configuration où `impostors * 2 >= joueurs`.
@@ -257,10 +265,11 @@ Pendant toute la phase `MEETING`, `player:declareDeath` est refusé (bouton dés
 
 - Majorité relative. Égalité en tête, ou « passer » en tête : personne n'est éjecté.
 - L'éjecté passe directement `GHOST`.
-- `meeting:result { ejectedId | null, role?, tally? }` :
-  - `role` présent si `confirmEjects = true` ;
+- `meeting:result { ejectedId | null, noEjection?, role?, impostorsLeft?, tally? }` :
+  - `noEjection` quand personne n'est éjecté : `tie` (égalité en tête, « passer » compris), `skipped` (« passer » seul en tête) ou `noVotes` (aucun vote) ; affiché « Égalité », « Vote passé » ou « Aucun vote » ;
+  - `role` et `impostorsLeft` (imposteurs encore en vie, `DYING` compris) présents si `confirmEjects = true` et qu'un joueur est éjecté : « 2 imposteurs restants » ;
   - `tally` (qui a voté pour qui) présent si `anonymousVotes = false`.
-- TV : animation d'éjection, rôle éventuel, détail éventuel des votes.
+- TV et téléphones : animation d'éjection, rôle éventuel, imposteurs restants, raison de la non-éjection, détail éventuel des votes. L'historique des réunions de fin de partie reprend la raison.
 - Évaluation des victoires. Sinon, compte à rebours `resumeCountdownSeconds` (« Dispersez-vous »), puis `PLAYING` avec :
   - cooldown de kill d'équipe **redémarré à sa valeur complète** ;
   - cooldown d'urgence redémarré.
@@ -272,34 +281,39 @@ Pendant toute la phase `MEETING`, `player:declareDeath` est refusé (bouton dés
   - `cemetery` (défaut) : à l'alarme, « Rejoignez le cimetière ». L'écran suit ensuite la phase, le minuteur et affiche le résultat, pour que le fantôme sache quand le jeu reprend.
   - `spectator` : à l'alarme, « Rejoignez le point de rassemblement ». Vue spectateur (phase, minuteur, liste). Pas de bouton « Je suis arrivé ».
 - Dans les deux modes, les fantômes ne comptent pas dans les arrivées et ne votent pas.
-- Réservé aux tâches, hors MVP : les fantômes feront leurs tâches à partir de la réunion qui suit leur mort, et toutes les tâches seront gelées pendant `MEETING` (`freezeTasksDuringMeeting`).
+- Les fantômes continuent leurs tâches (§19) ; les imposteurs fantômes peuvent saboter (§18). Les fantômes ne réparent pas les sabotages.
 
 ### 7.14 Conditions de victoire
 
 Évaluées après chaque mort effective, chaque déclenchement de réunion et chaque résultat de vote.
 
-- **Imposteurs** : nombre d'imposteurs vivants ≥ nombre d'équipiers vivants. Les joueurs `DYING` comptent encore comme vivants ; seuls `BODY` et `GHOST` comptent comme morts.
-- **Équipiers** : plus aucun imposteur vivant.
-- **MJ** : `admin:endGame { winner }`.
+Évaluées dans cet ordre (liste `WIN_CONDITIONS`) :
 
-`GAME_OVER` : la TV et tous les téléphones affichent l'équipe gagnante, la liste des rôles, et la chronologie des morts et des éjections (heure, joueur ; pas de tueur puisqu'il n'est pas connu).
+- **Équipiers** : plus aucun imposteur vivant (`impostorsOut`).
+- **Équipiers** : toutes les tâches des équipiers sont faites (`tasks`, §19) ; évaluée aussi après chaque tâche terminée.
+- **Imposteurs** : nombre d'imposteurs vivants ≥ nombre d'équipiers vivants (`parity`). Les joueurs `DYING` comptent encore comme vivants ; seuls `BODY` et `GHOST` comptent comme morts.
+- **Imposteurs** : un sabotage critique n'est pas réparé avant la fin de son compte à rebours (`reactor` ou `oxygen`, §18).
+- **MJ** : `admin:endGame { winner }` (`admin`).
+
+`GAME_OVER` : la TV et tous les téléphones affichent l'équipe gagnante, la raison de la victoire (`GameOverInfo.reason`), la liste des rôles, et la chronologie des morts et des éjections (heure, joueur ; pas de tueur puisqu'il n'est pas connu).
 
 ### 7.15 Console MJ (`/admin`)
 
 - Accès par `ADMIN_PIN`, session admin distincte.
-- **Lobby** : configuration des paramètres, liste des joueurs (exclure, renommer), lancer (normal ou forcé), page imprimable du QR d'urgence.
-- **En jeu** : tableau de tous les joueurs (couleur, pseudo, rôle, statut, échéance de mort), cooldowns en cours, quotas d'urgence, phase et minuteur, journal d'événements en direct.
-- **Actions** : `admin:callMeeting { bodyOfId? }`, `admin:advancePhase`, `admin:declareDeath { playerId }` (mort effective immédiate), `admin:revive { playerId }` (retour à `ALIVE`, uniquement depuis `DYING`, `BODY` ou `GHOST` non éjecté), `admin:endGame { winner }`, `admin:backToLobby`.
+- **Lobby** : configuration des paramètres (partie, tâches, sabotages), liste des joueurs (exclure, renommer, « scan OK »), lancer (normal ou forcé), pages imprimables du QR d'urgence et des stations.
+- **Stations** (toutes phases) : nom et lieu de chaque station utilisée par les réglages (`admin:updateStation`).
+- **En jeu** : tableau de tous les joueurs (couleur, pseudo, rôle, statut, échéance de mort), cooldowns en cours (kill, urgence, sabotage), sabotage en cours (auteur, codes O2), barre de progression réelle des tâches et tâches de chaque joueur, quotas d'urgence, phase et minuteur, journal d'événements en direct.
+- **Actions** : `admin:callMeeting { bodyOfId? }`, `admin:advancePhase`, `admin:declareDeath { playerId }` (mort effective immédiate), `admin:revive { playerId }` (retour à `ALIVE`, uniquement depuis `DYING`, `BODY` ou `GHOST` non éjecté), `admin:endGame { winner }`, `admin:backToLobby`, `admin:repairSabotage` (répare le sabotage en cours), `admin:completeTask { playerId, taskId }` (validation manuelle d'une tâche en secours).
 - Toute action MJ est journalisée comme les autres.
 
 ### 7.16 Écran partagé (`/tv`)
 
 | Phase | Affichage |
 |---|---|
-| `LOBBY` | QR d'accueil, joueurs et état « prêt » |
+| `LOBBY` | QR d'accueil, QR d'essai (§7.1), joueurs, état « prêt » et « scan ✓ » |
 | `ROLE_REVEAL` | « Découvrez votre rôle », compte à rebours |
-| `PLAYING` | Écran calme « Partie en cours » ; aucune information sur les morts |
-| `MEETING` | Motif, arrivées, discussion, votes, résultat (voir §7.9 à §7.12) |
+| `PLAYING` | Écran calme « Partie en cours » et barre de progression des tâches ; pendant un sabotage, alerte, compte à rebours et état de la réparation (§18). Aucune information sur les morts |
+| `MEETING` | Motif, arrivées, discussion, votes, résultat (voir §7.9 à §7.12), barre des tâches |
 | `GAME_OVER` | Vainqueurs, rôles, chronologie |
 
 La TV n'est jamais authentifiée comme joueur et ne reçoit jamais d'information de rôle avant `GAME_OVER` (sauf rôle de l'éjecté si `confirmEjects`).
@@ -319,6 +333,14 @@ lobby:ready         {}
 player:declareDeath {}
 player:arrived      {}
 player:vote         { targetId | "skip" }
+player:reportCode   { code }                  code à 4 chiffres affiché sous le QR d'un corps
+player:sabotage     { kind }                  imposteurs uniquement (§18)
+station:open        { at }                    ack { stationId } ; at = { token } ou { code } (§17)
+station:hold        { at, holding }           doigt posé (répété toutes les 1,5 s) ou levé
+station:code        { at, code }              code O2
+station:switch      { at, index }             interrupteur de la station électrique
+task:complete       { at, taskId }            étape de tâche réussie sur le téléphone (§19)
+task:keyTurn        { at }                    double clé
 
 admin:auth          { pin }
 admin:updateParams  { params }
@@ -331,6 +353,9 @@ admin:declareDeath  { playerId }
 admin:revive        { playerId }
 admin:endGame       { winner: "crew" | "impostors" }
 admin:backToLobby   {}
+admin:updateStation { stationId, name, location }
+admin:repairSabotage {}
+admin:completeTask  { playerId, taskId }
 ```
 
 ### REST (pages ouvertes par l'appareil photo natif)
@@ -340,7 +365,11 @@ GET  /r/:token          page de signalement de corps
 POST /api/report        { token }          en-tête de session requis
 GET  /e/:token          page de réunion d'urgence
 POST /api/emergency     { token }          en-tête de session requis
+GET  /t/:token          page d'entraînement au scan (lobby)
+POST /api/practice      { token }          en-tête de session requis
+GET  /s/:token          station : ouvre l'application joueur sur l'écran de la station (socket)
 GET  /api/print/emergency                  page imprimable (admin)
+GET  /api/print/stations                   page imprimable de toutes les stations utilisées (admin)
 ```
 
 ### Serveur → clients
@@ -360,7 +389,9 @@ meeting:called        { type, reporterId, bodyOfId?, ghostMode }
 meeting:roster        { alive[], dead[], arrived[] }
 meeting:voteCast      { voterId }
 meeting:result        { ejectedId | null, role?, tally? }
-game:over             { winner, roles[], timeline[] }
+game:over             { winner, reason, roles[], timeline[], meetings[] }
+sabotage:started      { kind, endsAt? }                     → tous
+sabotage:repaired     { kind }                              → tous
 error                 { code, message }                      → émetteur
 admin:*               journal, alertes, état complet         → admin
 ```
@@ -382,14 +413,18 @@ interface Player {
   dyingEffectiveAt?: number;
   emergencyUsed: number;
   ejected: boolean;
+  scanOk?: boolean;                 // entraînement au scan réussi (§7.1)
+  tasks?: PlayerTask[];             // liste tirée au lancement (fausse pour un imposteur)
 }
+
+interface PlayerTask { id: string; type: TaskType; step: number; done: boolean; }
 
 interface Meeting {
   id: string; type: "body" | "emergency" | "admin";
   reporterId?: string; bodyOfId?: string;
   subPhase: MeetingSubPhase; endsAt?: number;
   arrived: string[]; votes: Record<string, string | "skip">;
-  result?: { ejectedId: string | null };
+  result?: { ejectedId: string | null; noEjection?: "tie" | "skipped" | "noVotes" };
 }
 
 interface KillEvent { victimId: string; declaredAt: number; effectiveAt: number; }
@@ -402,8 +437,17 @@ interface GameState {
   killCooldownEndsAt?: number; emergencyCooldownEndsAt?: number;
   phaseEndsAt?: number;
   winner?: "crew" | "impostors";
+  winReason?: "impostorsOut" | "parity" | "tasks" | "reactor" | "oxygen" | "admin";
+  stationSetup?: Partial<Record<StationId, { name: string; location: string }>>;
+  sabotage?: ActiveSabotage;        // §18
+  sabotageCooldownEndsAt?: number;
+  holds?: Partial<Record<StationId, Record<string, number>>>;  // doigts posés : joueur → expiration
+  taskBarSnapshot?: { done: number; total: number };             // barre figée (mode « réunions »)
+  keyTurns?; keyMatchAt?; shieldChargeStartedAt?; shieldDoneAt?; // tâches coopératives (§19)
 }
 ```
+
+Un instantané enregistré par une version antérieure est complété au chargement : les paramètres apparus depuis prennent leur valeur par défaut.
 
 ## 10. Paramètres de partie
 
@@ -424,7 +468,15 @@ interface GameState {
 | `ghostMeetingMode` | `"cemetery"` | `"cemetery"` ou `"spectator"` |
 | `confirmEjects` | `true` | Révéler le rôle de l'éjecté |
 | `anonymousVotes` | `false` | Masquer le détail des votes |
-| `freezeTasksDuringMeeting` | `true` | Réservé aux tâches (hors MVP) |
+| `freezeTasksDuringMeeting` | `true` | Geler les tâches pendant les réunions |
+| `enabledTasks` | les 10 tâches | Tâches possibles (§19) |
+| `commonTasks` | 1 | Tâches communes par joueur (0 à 3) |
+| `longTasks` | 1 | Tâches longues par joueur (0 à 3) |
+| `shortTasks` | 3 | Tâches courtes par joueur (0 à 8) |
+| `taskBarUpdates` | `"always"` | Barre visible des joueurs et de la TV : `"always"`, `"meetings"` (mise à jour seulement en réunion) ou `"never"` |
+| `enabledSabotages` | `["reactor", "oxygen", "lights"]` | Sabotages possibles (§18) |
+| `sabotageCriticalSeconds` | 60 | Compte à rebours des sabotages critiques |
+| `sabotageCooldownSeconds` | 90 | Délai commun aux imposteurs, après le début du jeu, chaque sabotage et chaque réunion |
 
 Valider les paramètres côté serveur (bornes raisonnables) et les figer au lancement de la partie.
 
@@ -436,6 +488,8 @@ Valider les paramètres côté serveur (bornes raisonnables) et les figer au lan
 - Jetons QR signés HMAC-SHA256, comparaison en temps constant.
 - Aucun son sur le téléphone de la victime au moment du kill ni sur celui de l'imposteur au `kill:ready`.
 - Code admin requis pour toute commande `admin:*` ; limiter les tentatives.
+- Écrans identiques pour tous : le menu de sabotage est caché dans la zone « maintenir pour voir ton rôle » ; les imposteurs ont une fausse liste de tâches de même forme, avec les mêmes mini-jeux et les mêmes réponses. Le cooldown de sabotage n'est envoyé qu'aux imposteurs, l'auteur d'un sabotage qu'au MJ.
+- Codes tapés à la main (corps, stations, O2) : 5 erreurs bloquent le joueur 30 s.
 
 ## 12. Contraintes des navigateurs mobiles
 
@@ -464,17 +518,16 @@ Tests unitaires Vitest sur le moteur pur, au minimum :
 - Kill : refus hors `PLAYING`, irréversibilité, passage `DYING → BODY` à l'échéance, cooldown d'équipe et redémarrage.
 - Corps : jeton valide, expiré, falsifié, joueur non `BODY`.
 - Réunion : `DYING` finalisés et `BODY → GHOST` au déclenchement, rassemblement, vote (égalité, « passer » en tête, absence de vote, fin anticipée), réinitialisation des cooldowns à la reprise.
-- Victoires : après mort effective, après déclenchement de réunion, après éjection.
-- Persistance : reconstruction de l'état après redémarrage, timers replanifiés.
+- Victoires : après mort effective, après déclenchement de réunion, après éjection, après la dernière tâche, à l'échec d'un sabotage critique.
+- Persistance : reconstruction de l'état après redémarrage, timers replanifiés (y compris sabotage et doigts posés), mise à niveau d'un ancien instantané.
+- Sabotages : réparation, échec (victoire des imposteurs), annulation par une réunion, cooldown partagé, aucune fuite de l'auteur ni du cooldown.
+- Tâches : tirage, fausses listes identiques, étapes dans l'ordre, gel en réunion, fantômes, tâches coopératives, barre selon `taskBarUpdates`, victoire par les tâches.
 
-## 15. Points d'extension pour les tâches
+## 15. Évolutions possibles
 
-Ne rien implémenter, mais prévoir :
-
-- une entité `Station` et un préfixe d'URL `/s/:token` réservé ;
-- un emplacement dans `state:sync` et dans l'écran joueur pour la liste des tâches ;
-- une condition de victoire « tâches » branchable dans l'évaluateur de victoires ;
-- le paramètre `freezeTasksDuringMeeting` déjà présent.
+- Sabotage « Comms » : masquer la liste des tâches jusqu'à la réparation.
+- Tâches visuelles (prouvent l'innocence) et tâches physiques avec un QR « de fin » caché.
+- Stations dupliquées (même tâche, deux QR) pour les grandes parties.
 
 ## 16. Plan d'implémentation
 
@@ -490,3 +543,44 @@ Procéder par étapes, chacune laissant le projet fonctionnel et testé :
 8. **Contraintes mobiles** (§12) et script de simulation.
 
 Après chaque étape : lancer les tests et vérifier le build Docker.
+
+## 17. Stations
+
+- Une station est un lieu physique avec un QR code imprimé `PUBLIC_URL/s/<token>`, jeton `S|gameId|stationId` signé HMAC : il change à chaque nouvelle partie (réimprimer après « Rejouer »). Sous chaque QR est imprimé un **code à 4 chiffres** (dérivé de la partie, distinct pour chaque station), à taper dans le jeu (« Code d'une station ») quand l'appareil photo ouvre un autre navigateur.
+- Catalogue fixe (`packages/shared/src/stations.ts`) : 6 stations de sabotage (Réacteur gauche et droit, O2 filtre et réserve, Admin, Électricité) et 13 stations de tâches (§19). Une station n'est « utilisée » que si son sabotage ou sa tâche est activé ; seules les stations utilisées sont affichées et imprimées.
+- Le MJ donne à chaque station un nom et un lieu (conservés d'une partie à l'autre) ; `GET /api/print/stations` imprime toutes les stations utilisées (QR, nom, lieu, code, rôle de la station).
+- Scanner une station ouvre l'application joueur sur l'écran de la station (le jeton accompagne chaque commande de station ; le transport le vérifie). Sans session sur ce navigateur : même message que `/r/:token`, avec le conseil de taper le code. Une station ne sert que pendant `PLAYING` (et en réunion pour les tâches si `freezeTasksDuringMeeting = false`) ; une réunion referme l'écran de station.
+
+## 18. Sabotages
+
+- **Menu caché** : pendant la partie, maintenir la zone « Maintenir pour voir ton rôle » affiche la carte de rôle en plein écran. Pour un imposteur, elle contient une cible « Glisse ici et relâche pour saboter » : glisser le doigt dessus et le relâcher ouvre le menu de sabotage. Un simple appui ne déclenche rien ; l'écran est identique pour les équipiers tant qu'on ne maintient pas. Les imposteurs fantômes peuvent saboter.
+- **Règles** : un seul sabotage actif ; cooldown commun aux imposteurs (`sabotageCooldownSeconds`), relancé au début du jeu, après chaque sabotage et à la reprise après une réunion ; toute réunion annule le sabotage en cours ; bouton d'urgence refusé pendant un sabotage critique (« Bouton bloqué pendant un sabotage critique ») ; seuls les vivants (`ALIVE`, `DYING`) réparent, équipiers comme imposteurs.
+- **Alerte** : `sabotage:started` à tous : son et vibration sur tous les téléphones, alerte plein écran sur les téléphones et la TV, puis bandeau permanent avec compte à rebours, consignes et état de la réparation. La TV répète l'alarme pendant un sabotage critique.
+- **Réacteur** (critique) : réparé dès que deux joueurs maintiennent le doigt en même temps sur les stations Réacteur gauche et droit. Un doigt posé est confirmé toutes les 1,5 s par le téléphone et expire après 4 s sans confirmation (minuteur dérivé de l'état) ; un joueur ne tient qu'une station à la fois.
+- **Oxygène** (critique) : deux codes à 4 chiffres tirés au sort, lisibles à la station Admin (le code n'apparaît que dans la vue des joueurs qui l'ont ouverte), à taper chacun à sa station O2 ; réparé quand les deux sont validés.
+- **Lumières** (non critique) : signalements de corps (scan et code) refusés jusqu'à la réparation ; 5 interrupteurs aléatoires (au moins 2 éteints) à remettre sur ON à la station Électricité. Le bouton d'urgence reste utilisable.
+- **Échec** : à la fin du compte à rebours d'un sabotage critique (`sabotageCriticalSeconds`), victoire des imposteurs (`reactor` ou `oxygen`).
+- Le MJ voit l'auteur et les codes, et peut réparer le sabotage en cours.
+
+## 19. Tâches
+
+Catalogue (`packages/shared/src/tasks.ts`, filtre « Téléphone » de `docs/propositions-taches.html`), une station par étape :
+
+| Tâche | Type | Station(s) | Déroulé sur le téléphone |
+|---|---|---|---|
+| Carte d'accès | commune | Lecteur de carte | Glisser la carte en 0,5 à 1,5 s |
+| Télécharger puis envoyer les données | longue | Téléchargement, puis Envoi | Jauge de 20 s à chaque station ; l'écran doit rester allumé (masquer la page interrompt) |
+| Remplir le moteur | longue | Réserve de carburant, puis Moteur | Maintenir 10 s à chaque station ; relâcher remet à zéro |
+| Brancher les câbles | courte | Câblage | Relier 4 fils de couleur à leur prise |
+| Code du coffre | courte | Coffre-fort | Mémoriser 5 chiffres (3 s) puis les retaper ; nouveau code à chaque essai |
+| Calibrer le distributeur | courte | Distributeur | Arrêter 3 jauges dans la zone verte |
+| Réacteur (Simon) | courte | Démarreur du réacteur | Répéter une séquence de couleurs jusqu'à 5 ; une erreur recommence |
+| Aligner l'antenne | courte | Antenne | Pointer la cible avec un curseur (sans gyroscope) et tenir 1 s |
+| Double clé | courte, 2 joueurs | Clé A + Clé B | Tourner les deux clés à moins de 5 s d'écart |
+| Bouclier du vaisseau | courte, 3 joueurs | Boucliers | Trois joueurs maintiennent le doigt ensemble 10 s |
+
+- **Tirage** côté serveur au lancement : `commonTasks` communes (les mêmes pour tous), `longTasks` longues et `shortTasks` courtes au hasard parmi `enabledTasks` (plafonné par les tâches disponibles). Les **imposteurs** reçoivent une fausse liste tirée de la même façon : même écran, mêmes mini-jeux, mêmes durées et mêmes réponses, mais leurs validations ne comptent pas dans la barre.
+- Les étapes se font dans l'ordre, à la bonne station (« Étape suivante à la station … »). Les mini-jeux tournent sur le téléphone ; la réussite envoie `task:complete`. Tâches coopératives : n'importe qui peut aider (imposteur compris) ; la tâche est validée pour chaque participant qui l'a.
+- Les **fantômes** continuent leurs tâches ; un corps (`BODY`) ne peut rien faire. Les tâches sont **gelées pendant les réunions** si `freezeTasksDuringMeeting` (défaut).
+- **Barre de progression** = tâches faites / tâches des équipiers (vivants et morts). TV, téléphones et console MJ ; selon `taskBarUpdates` : toujours, seulement pendant les réunions (valeur figée au début de chaque réunion et à la reprise), ou jamais (le MJ voit toujours la valeur réelle ; la fin de partie montre la valeur finale). Quand toutes les tâches des équipiers sont faites, les équipiers gagnent.
+- Le MJ active chaque tâche, règle le nombre de tâches par type, nomme et place les stations, les imprime et peut valider une tâche à la main.

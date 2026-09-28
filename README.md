@@ -2,9 +2,11 @@
 
 Arbitre numérique pour jouer à Among Us en vrai, dans une maison ou un jardin. Chaque joueur utilise son smartphone comme terminal, directement dans le navigateur, sans rien installer. Le serveur tourne sur un mini-PC ou un Raspberry Pi, sur un Wi-Fi local sans accès à internet.
 
-- **Joueurs** : `/` sur le téléphone (lobby, rôle secret, « Je suis mort », corps en QR code, réunions, vote).
+- **Joueurs** : `/` sur le téléphone (lobby, rôle secret, tâches, « Je suis mort », corps en QR code, réunions, vote).
 - **Écran partagé** : `/tv` sur une TV ou un vidéoprojecteur.
 - **Maître du jeu** : `/admin` sur un ordinateur ou une tablette, protégé par un code. Le MJ voit tous les rôles et ne joue pas.
+
+Des **stations** imprimées (QR codes) sont réparties dans la maison : les joueurs y font leurs **tâches** sur le téléphone (mini-jeux) et y réparent les **sabotages** des imposteurs (réacteur, oxygène, lumières).
 
 La référence complète des règles et du fonctionnement est dans [SPEC.md](SPEC.md).
 
@@ -12,25 +14,35 @@ La référence complète des règles et du fonctionnement est dans [SPEC.md](SPE
 
 ### Sur le téléphone
 
-| Rejoindre | Lobby et consignes | Rôle secret (maintenir) |
+| Rejoindre | Entraînement au scan | Lobby et consignes |
 |:-:|:-:|:-:|
-| <img src="docs/screenshots/phone-join.png" width="240"> | <img src="docs/screenshots/phone-lobby.png" width="240"> | <img src="docs/screenshots/phone-role-impostor.png" width="240"> |
+| <img src="docs/screenshots/phone-join.png" width="240"> | <img src="docs/screenshots/phone-scan-ok.png" width="240"> | <img src="docs/screenshots/phone-lobby.png" width="240"> |
 
-| En jeu | Mort : le téléphone devient le corps | Corps signalé |
+| Rôle secret (maintenir) | En jeu : mes tâches | Une tâche à sa station |
 |:-:|:-:|:-:|
-| <img src="docs/screenshots/phone-playing.png" width="240"> | <img src="docs/screenshots/phone-body.png" width="240"> | <img src="docs/screenshots/phone-alarm.png" width="240"> |
+| <img src="docs/screenshots/phone-role-impostor.png" width="240"> | <img src="docs/screenshots/phone-playing.png" width="240"> | <img src="docs/screenshots/phone-task.png" width="240"> |
 
-| Rassemblement | Vote | Résultat |
+| Menu de sabotage caché | Sabotage en cours | Réparer le réacteur |
 |:-:|:-:|:-:|
-| <img src="docs/screenshots/phone-gathering.png" width="240"> | <img src="docs/screenshots/phone-vote.png" width="240"> | <img src="docs/screenshots/phone-result.png" width="240"> |
+| <img src="docs/screenshots/phone-sabotage-menu.png" width="240"> | <img src="docs/screenshots/phone-sabotage.png" width="240"> | <img src="docs/screenshots/phone-station-reactor.png" width="240"> |
 
-<p align="center"><img src="docs/screenshots/phone-victory.png" width="240"></p>
+| Mort : le téléphone devient le corps | Corps signalé | Rassemblement |
+|:-:|:-:|:-:|
+| <img src="docs/screenshots/phone-body.png" width="240"> | <img src="docs/screenshots/phone-alarm.png" width="240"> | <img src="docs/screenshots/phone-gathering.png" width="240"> |
+
+| Vote | Résultat | Victoire |
+|:-:|:-:|:-:|
+| <img src="docs/screenshots/phone-vote.png" width="240"> | <img src="docs/screenshots/phone-result.png" width="240"> | <img src="docs/screenshots/phone-victory.png" width="240"> |
 
 ### Sur la TV
 
-| Lobby | Révélation des rôles |
+| Lobby (avec le QR d'essai) | Révélation des rôles |
 |:-:|:-:|
 | <img src="docs/screenshots/tv-lobby.png" width="420"> | <img src="docs/screenshots/tv-reveal.png" width="420"> |
+
+| Partie en cours : barre des tâches | Sabotage du réacteur |
+|:-:|:-:|
+| <img src="docs/screenshots/tv-playing.png" width="420"> | <img src="docs/screenshots/tv-sabotage.png" width="420"> |
 
 | Alarme | Discussion |
 |:-:|:-:|
@@ -44,7 +56,9 @@ La référence complète des règles et du fonctionnement est dans [SPEC.md](SPE
 
 ### Console du maître du jeu
 
-<p align="center"><img src="docs/screenshots/admin.png" width="760"></p>
+| Lobby : paramètres, tâches, sabotages, stations | En jeu : joueurs, sabotage, tâches |
+|:-:|:-:|
+| <img src="docs/screenshots/admin-lobby.png" width="420"> | <img src="docs/screenshots/admin.png" width="420"> |
 
 ## Préparer la soirée
 
@@ -53,7 +67,7 @@ La référence complète des règles et du fonctionnement est dans [SPEC.md](SPE
 - Un Raspberry Pi 5 ou un mini-PC avec Docker, branché sur le routeur Wi-Fi de la soirée.
 - Un routeur Wi-Fi local. Internet n'est pas nécessaire pendant la partie.
 - Une TV ou un vidéoprojecteur relié à un navigateur (ordinateur, clé HDMI…).
-- Une imprimante pour le QR code de la station d'urgence.
+- Une imprimante pour le QR code de la station d'urgence et les QR codes des stations (tâches et sabotages).
 - Un téléphone chargé par joueur, avec un navigateur récent.
 
 ### Installation (à faire chez soi, avec internet)
@@ -87,10 +101,12 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 ### Le jour J
 
 1. Ouvrez `/tv` sur l'écran partagé et cliquez une fois pour activer le son.
-2. Ouvrez `/admin` et entrez le code. Réglez les paramètres (durées, nombre d'imposteurs, mode des fantômes…).
-3. Cliquez sur **QR d'urgence (imprimer)** et imprimez la page. Collez-la à l'endroit de la station d'urgence. Elle n'est valable que pour la partie en cours : réimprimez-la après chaque « Rejouer ».
-4. Les joueurs scannent le QR code de la TV, choisissent un pseudo et une couleur, puis touchent **Je suis prêt**. Ce bouton active le son, teste la vibration et garde l'écran allumé.
-5. Lancez la partie depuis la console.
+2. Ouvrez `/admin` et entrez le code. Réglez les paramètres : durées, nombre d'imposteurs, mode des fantômes, tâches (lesquelles, combien par joueur, visibilité de la barre de progression) et sabotages (lesquels, compte à rebours, délai entre deux sabotages).
+3. Dans le panneau **Stations**, donnez à chaque station un nom et un lieu (ex. « Moteur », « Jardin ») : les joueurs les voient dans leur liste de tâches. Éloignez les deux étapes des tâches longues, les deux stations Réacteur, les deux stations O2 et les deux Clés.
+4. Imprimez **QR d'urgence (imprimer)** et **Stations (imprimer)**, puis collez chaque page à sa place. Ces QR codes ne sont valables que pour la partie en cours : réimprimez-les après chaque « Rejouer ».
+5. Les joueurs scannent le QR code de la TV, choisissent un pseudo et une couleur, puis touchent **Je suis prêt**. Ce bouton active le son, teste la vibration et garde l'écran allumé.
+6. **Entraînement au scan** : chaque joueur scanne le petit QR d'essai affiché sur la TV avec l'appareil photo de son téléphone. « Scan OK » s'affiche sur son téléphone, sur la TV et dans la console : l'appareil photo ouvre bien le jeu. Sinon, la page conseille de rejoindre la partie avec le navigateur par défaut du téléphone.
+7. Lancez la partie depuis la console.
 
 ### Rappel des règles physiques
 
@@ -98,6 +114,13 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 - **Mourir** : la victime maintient **Je suis mort** 1,5 s. Après un court délai, son téléphone affiche un QR code : c'est son corps. Elle reste sur place, écran visible, sans parler.
 - **Signaler** : un joueur vivant scanne le corps avec l'**appareil photo** de son téléphone. Il faut ouvrir le lien dans le navigateur qui a servi à rejoindre la partie. Si l'appareil photo ouvre un autre navigateur, le joueur touche **Code d'un corps** dans le jeu et tape les 4 chiffres affichés sous le QR du corps (le code change avec le QR ; 5 erreurs bloquent 30 s).
 - **Réunion d'urgence** : scanner le QR code imprimé de la station.
+- **Tâches** : chaque joueur a sa liste (par défaut 1 commune, 1 longue, 3 courtes). Il scanne la station indiquée (ou tape le code imprimé dessous avec **Code d'une station**) et fait le mini-jeu sur son téléphone. Les imposteurs ont une fausse liste qui ne fait pas avancer la barre ; les fantômes continuent leurs tâches. Quand la barre est pleine, les équipiers gagnent.
+- **Sabotages** : un imposteur maintient la zone « Maintenir pour voir ton rôle », glisse le doigt sur « saboter » et relâche. Tous les téléphones et la TV donnent l'alerte :
+  - **Réacteur** : deux joueurs posent le doigt en même temps sur les deux stations Réacteur ;
+  - **Oxygène** : lire les deux codes à la station Admin, puis les taper aux deux stations O2 ;
+  - **Lumières** : remettre les interrupteurs à la station Électricité ; en attendant, impossible de signaler un corps.
+
+  Réacteur et oxygène non réparés à temps : victoire des imposteurs. Pendant ces deux sabotages, le bouton d'urgence est bloqué ; toute réunion annule le sabotage.
 - **Fantômes** : ils ne parlent jamais aux vivants.
 
 ### Conseils
@@ -106,7 +129,7 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 - Rejoignez la partie avec le navigateur par défaut du téléphone (Safari sur iPhone) : c'est lui qu'ouvre l'appareil photo. N'ajoutez pas le jeu à l'écran d'accueil, la session n'y serait pas partagée.
 - Sur iPhone, la vibration n'existe pas dans le navigateur : l'écran affiche toujours un signal visuel.
 - Si un téléphone s'éteint ou se recharge, il suffit de rouvrir la page : la session est conservée. Un bandeau demande de toucher l'écran pour réactiver le son et l'écran allumé.
-- En cas de problème, le MJ peut tout rattraper depuis la console : signaler un corps à la place d'un joueur, tuer ou réanimer, passer à la phase suivante, terminer la partie ou l'annuler pour revenir au lobby.
+- En cas de problème, le MJ peut tout rattraper depuis la console : signaler un corps à la place d'un joueur, tuer ou réanimer, passer à la phase suivante, réparer un sabotage, valider une tâche à la main, terminer la partie ou l'annuler pour revenir au lobby.
 - Les joueurs hors ligne sont signalés sur la TV et dans les listes : un téléphone éteint bloque le rassemblement jusqu'au délai maximum, le MJ peut passer à la suite.
 
 ## Développement
@@ -125,9 +148,11 @@ pnpm start        # lance le build de production
 Tester sans téléphones :
 
 ```bash
-pnpm simulate --players 8              # des bots jouent une partie complète
+pnpm simulate --players 8              # des bots jouent une partie complète (kills, sabotage, votes)
 pnpm simulate --players 4 --passive    # des bots attendent ; vous pilotez depuis /admin
 ```
+
+Dans les deux modes, les bots vivants réparent les sabotages et les bots font une étape de tâche toutes les 20 secondes (`--task-every 5` pour accélérer, `--task-every 0` pour les arrêter).
 
 - Ajoutez `?dev=1` à l'URL joueur pour ouvrir plusieurs joueurs dans les onglets d'un même navigateur.
 - `TIME_SCALE=0.2` accélère toutes les durées (développement uniquement).

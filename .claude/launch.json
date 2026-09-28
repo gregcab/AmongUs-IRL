@@ -6,6 +6,18 @@
       "runtimeExecutable": "env",
       "runtimeArgs": ["PORT=8080", "ADMIN_PIN=1234", "DATA_DIR=data", "node", "apps/server/dist/index.js"],
       "port": 8080
+    },
+    {
+      "name": "dev-server",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PORT=8095", "ADMIN_PIN=1234", "DATA_DIR=data", "PUBLIC_URL=http://localhost:5180", "pnpm", "--filter", "@among-us/server", "dev"],
+      "port": 8095
+    },
+    {
+      "name": "dev-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["BACKEND_URL=http://localhost:8095", "pnpm", "--filter", "@among-us/web", "exec", "vite", "--port", "5180", "--strictPort"],
+      "port": 5180
     }
   ]
 }

@@ -82,9 +82,9 @@ async function open(browser: Browser, url: string, options: BrowserContextOption
   return page;
 }
 
-async function shot(page: Page, name: string, settleMs = 600): Promise<void> {
+async function shot(page: Page, name: string, settleMs = 600, fullPage = false): Promise<void> {
   await sleep(settleMs);
-  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  await page.screenshot({ path: join(OUT, `${name}.png`), fullPage });
   log(name);
 }
 
@@ -133,6 +133,19 @@ async function play(browser: Browser, url: string, app: App): Promise<void> {
     ["o2-b", "Chambre"],
     ["admin", "Salon"],
     ["electrical", "Entrée"],
+    ["card", "Entrée"],
+    ["data-download", "Salon"],
+    ["data-upload", "Garage"],
+    ["fuel-tank", "Garage"],
+    ["engine", "Fond du jardin"],
+    ["wires", "Couloir"],
+    ["safe", "Chambre"],
+    ["distributor", "Cuisine"],
+    ["simon", "Garage"],
+    ["antenna", "Jardin"],
+    ["key-a", "Cuisine"],
+    ["key-b", "Jardin"],
+    ["shield", "Salon"],
   ]) {
     await admin.ok("admin:updateStation", { stationId, name: "", location });
   }
@@ -170,12 +183,33 @@ async function play(browser: Browser, url: string, app: App): Promise<void> {
   ]) {
     await addBot(name!, color!);
   }
+
+  // Scan practice: some bots and Camille scan the TV's test QR code.
+  const practice = app.tokens.practiceToken(app.runtime.state.gameId);
+  for (const b of bots.slice(0, 4)) {
+    await fetch(`${url}/api/practice`, {
+      method: "POST",
+      headers: { "content-type": "application/json", [SESSION_HEADER]: b.token },
+      body: JSON.stringify({ token: practice }),
+    });
+  }
+  await phone.goto(`${url}/t/${practice}`);
+  await phone.getByText("Scan OK").waitFor();
+  await shot(phone, "phone-scan-ok");
+  await phone.getByRole("link", { name: "Retour au jeu" }).click();
+  await phone.getByText("En attente du lancement").waitFor();
+  await tap(phone);
   await shot(phone, "phone-lobby");
 
   const tv = await open(browser, `${url}/tv`, TV);
   await tv.getByRole("button", { name: "Cliquer pour activer le son" }).click();
   await tv.getByText("Équipage").waitFor();
   await shot(tv, "tv-lobby");
+
+  const lobbyDesk = await open(browser, `${url}/admin`, DESKTOP, { "amongus.admin": adminToken });
+  await lobbyDesk.getByRole("heading", { name: "Paramètres" }).waitFor();
+  await shot(lobbyDesk, "admin-lobby", 600, true);
+  await lobbyDesk.context().close();
 
   // Start: roles.
   await admin.ok("admin:start", {});
@@ -251,7 +285,7 @@ async function play(browser: Browser, url: string, app: App): Promise<void> {
   await shot(phone, "phone-station-reactor");
   const helper = crew.find((b) => b.id !== crew[0]!.id && b.id !== crew[1]!.id) ?? crew[0]!;
   await helper.c.ok("station:hold", { at: { token: stationUrl("reactor-b").split("/s/")[1] }, holding: true });
-  await phone.getByText("Réparé").waitFor();
+  await phone.getByText("Réparé !").waitFor();
   await phone.locator(".reactor-pad, .station-idle").first().waitFor();
   await phone.getByRole("button", { name: "Retour au jeu" }).click();
   await phone.getByText("Mes tâches").waitFor();
