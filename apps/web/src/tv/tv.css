@@ -170,8 +170,12 @@
   white-space: nowrap;
 }
 
+.tv-grid.compact {
+  gap: 10px;
+}
+
 .tv-grid.compact li {
-  padding: 8px 14px;
+  padding: 5px 12px;
   gap: 10px;
 }
 
@@ -213,6 +217,24 @@
   font-size: 1.7rem;
   font-weight: 700;
   line-height: 1.15;
+}
+
+.tv-practice.compact {
+  padding: 10px 16px;
+  gap: 16px;
+}
+
+.tv-practice.compact .tv-practice-qr canvas {
+  width: 120px !important;
+  height: 120px !important;
+}
+
+.tv-practice.compact .tv-practice-title {
+  font-size: 1.35rem;
+}
+
+.tv-practice.compact .tv-sub {
+  font-size: 1.05rem !important;
 }
 
 .tv-grid .pill-ok {

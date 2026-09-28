@@ -148,6 +148,8 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
 
 function Lobby({ view }: { view: TvView }) {
   const ready = view.players.filter((p) => p.ready).length;
+  // Up to 15 players and the practice QR must fit a 16:9 screen without scrolling.
+  const crowded = view.players.length > 8;
   return (
     <div className="tv-lobby">
       <div className="tv-qr">
@@ -165,12 +167,12 @@ function Lobby({ view }: { view: TvView }) {
             {ready} / {view.players.length} prêts
           </div>
         </div>
-        <PlayerGrid players={view.players} mark={(p) => p.ready} scanTags compact={view.players.length > 8} />
+        <PlayerGrid players={view.players} mark={(p) => p.ready} scanTags compact={crowded} />
         {view.players.length < view.params.minPlayers && (
           <p className="tv-sub">Encore {view.params.minPlayers - view.players.length} joueur(s) minimum</p>
         )}
         {view.practiceUrl && (
-          <div className="tv-practice">
+          <div className={`tv-practice${crowded ? " compact" : ""}`}>
             <div className="tv-practice-qr">
               <QrCode value={view.practiceUrl} size={320} />
             </div>
@@ -208,7 +210,7 @@ function PlayerGrid({
         const marked = mark?.(p);
         return (
           <li key={p.id} className={`${dead ? "dead" : ""}${marked ? " marked" : ""}`}>
-            <Crewmate color={p.color} size={compact ? 40 : 52} variant={dead ? "ghost" : "alive"} />
+            <Crewmate color={p.color} size={compact ? 34 : 52} variant={dead ? "ghost" : "alive"} />
             <span className="tv-name">{p.name}</span>
             {scanTags && p.scanOk && <span className="tv-scan-tag">scan ✓</span>}
             {marked && <span className="pill-ok">✓</span>}
@@ -223,6 +225,7 @@ function PlayerGrid({
 
 function Meeting({ view, meeting }: { view: TvView; meeting: PublicMeeting }) {
   const alive = view.players.filter((p) => meeting.alive.includes(p.id));
+  const crowded = view.players.length > 10;
   return (
     <div className="tv-page">
       <div className="tv-meeting-head">
@@ -243,16 +246,16 @@ function Meeting({ view, meeting }: { view: TvView; meeting: PublicMeeting }) {
           <div className="title">
             Arrivés : {meeting.arrived.length} / {meeting.alive.length}
           </div>
-          <PlayerGrid players={alive} mark={(p) => meeting.arrived.includes(p.id)} />
+          <PlayerGrid players={alive} mark={(p) => meeting.arrived.includes(p.id)} compact={crowded} />
         </>
       )}
-      {meeting.subPhase === "DISCUSSION" && <PlayerGrid players={view.players} strike />}
+      {meeting.subPhase === "DISCUSSION" && <PlayerGrid players={view.players} strike compact={crowded} />}
       {meeting.subPhase === "VOTING" && (
         <>
           <div className="title">
             Votes : {meeting.voted.length} / {meeting.alive.length}
           </div>
-          <PlayerGrid players={alive} mark={(p) => meeting.voted.includes(p.id)} />
+          <PlayerGrid players={alive} mark={(p) => meeting.voted.includes(p.id)} compact={crowded} />
         </>
       )}
       {meeting.subPhase === "RESULT" && (
