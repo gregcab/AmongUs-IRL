@@ -436,10 +436,13 @@ export function DataTransfer({ upload, onDone }: GameProps & { upload: boolean }
 
 export function FuelHold({ empty, onDone }: GameProps & { empty: boolean }) {
   const [finished, finish] = useFinish(onDone);
+  const [progress, setProgress] = useState(0);
+  // Filling at the tank, emptying into the engine.
+  const level = finished ? (empty ? 0 : 1) : empty ? 1 - progress : progress;
   return (
     <div className="minigame stack center">
-      <div className={`fuel-can${finished ? (empty ? " empty" : " full") : empty ? " full" : ""}`} aria-hidden>
-        <span />
+      <div className="fuel-can" aria-hidden>
+        <span style={{ height: `${level * 100}%` }} />
       </div>
       {finished ? (
         <div className="big check">{empty ? "Moteur rempli !" : "Bidon rempli !"}</div>
@@ -450,6 +453,7 @@ export function FuelHold({ empty, onDone }: GameProps & { empty: boolean }) {
           holdingLabel={empty ? "Vidage…" : "Remplissage…"}
           durationMs={FUEL_HOLD_MS}
           onComplete={finish}
+          onProgress={setProgress}
         />
       )}
       <p className="muted small" style={{ margin: 0 }}>

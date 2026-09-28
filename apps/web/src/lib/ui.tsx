@@ -52,6 +52,7 @@ export function HoldButton({
   holdingLabel,
   durationMs,
   onComplete,
+  onProgress,
   disabled,
   className,
 }: {
@@ -59,10 +60,17 @@ export function HoldButton({
   holdingLabel?: ReactNode;
   durationMs: number;
   onComplete: () => void;
+  /** Hold progress from 0 to 1, back to 0 on release. */
+  onProgress?: (progress: number) => void;
   disabled?: boolean;
   className?: string;
 }) {
   const [progress, setProgress] = useState(0);
+  const progressRef = useRef(onProgress);
+  progressRef.current = onProgress;
+  useEffect(() => {
+    progressRef.current?.(progress);
+  }, [progress]);
   const frame = useRef<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAt = useRef<number | null>(null);
