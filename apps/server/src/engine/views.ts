@@ -9,9 +9,9 @@ import type {
   PublicMeetingResult,
   PublicPlayer,
   PublicSabotage,
-  StationId,
   TvView,
 } from "@among-us/shared";
+import { SABOTAGE_STATIONS } from "@among-us/shared";
 import { enabledStations, isAlive, playersInOrder } from "./state";
 import { coopView, crewProgress, visibleTaskBar } from "./tasks";
 
@@ -86,7 +86,7 @@ export function publicSabotage(s: GameState, readerId?: string): PublicSabotage 
   if (!active || s.phase !== "PLAYING") return undefined;
   const view: PublicSabotage = { id: active.id, kind: active.kind, startedAt: active.startedAt, endsAt: active.endsAt };
   if (active.kind === "reactor") {
-    view.held = (Object.keys(s.holds ?? {}) as StationId[]).filter((id) => Object.keys(s.holds![id] ?? {}).length > 0).sort();
+    view.held = SABOTAGE_STATIONS.reactor.filter((id) => Object.keys(s.holds?.[id] ?? {}).length > 0);
   }
   if (active.kind === "oxygen") {
     view.entered = [...(active.entered ?? [])];

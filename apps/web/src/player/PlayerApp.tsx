@@ -1,4 +1,4 @@
-import type { AnonymousView, PlayerView, PublicMeeting, SabotageKind, ServerToClientPayloads, StationAccess, StationId } from "@among-us/shared";
+import { stationDef, type AnonymousView, type PlayerView, type PublicMeeting, type SabotageKind, type ServerToClientPayloads, type StationAccess, type StationId } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playAlarm, playPowerDown, playRepaired, playSabotageAlarm, playVictory } from "../lib/audio";
 import { AlarmOverlay, ResultBlock, type AlarmInfo } from "../lib/game";
@@ -148,11 +148,17 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
     void openStation({ token: stationToken }).then((ok) => ok || closeStation());
   }, [stationToken, isPlayer, openStation, closeStation]);
 
-  // Stations only make sense during play: a meeting or the end of the game closes them.
+  // Stations only make sense during play: a meeting or the end of the game closes them,
+  // except task stations when the game master lets tasks go on during meetings.
+  const stationUsable =
+    station !== null &&
+    view?.kind === "player" &&
+    view.me.status !== "BODY" &&
+    (view.phase === "PLAYING" || (view.phase === "MEETING" && !view.params.freezeTasksDuringMeeting && stationDef(station.id).task !== undefined));
   const phase = view?.phase;
   useEffect(() => {
-    if (station && phase !== "PLAYING") closeStation();
-  }, [station, phase, closeStation]);
+    if (station && !stationUsable && phase !== undefined && phase !== "PLAYING") closeStation();
+  }, [station, stationUsable, phase, closeStation]);
 
   let content: React.ReactNode;
   if (!view) {
@@ -179,7 +185,7 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
           <ResultBlock meeting={lingeringResult} players={view.players} />
           <p className="muted center">Fin de la partie…</p>
         </div>
-      ) : station && view.phase === "PLAYING" && view.me.status !== "BODY" ? (
+      ) : station && stationUsable ? (
         <StationScreen view={view} station={station} send={send} onClose={closeStation} />
       ) : (
         <PlayerScreens view={view} send={send} bodyQr={bodyQr} openStation={openStation} />
