@@ -158,7 +158,20 @@ Dans les deux modes, les bots vivants réparent les sabotages et les bots font u
 - `TIME_SCALE=0.2` accélère toutes les durées (développement uniquement).
 - `pnpm screenshots` régénère les captures de ce README. Il faut d'abord lancer `pnpm build`, et Google Chrome doit être installé.
 
-La CI GitHub (`.github/workflows/ci.yml`) vérifie les types, les tests, le build, et construit l'image Docker pour amd64 et arm64 (Raspberry Pi).
+La CI GitHub (`.github/workflows/ci.yml`) vérifie les types, les tests, le build, et construit l'image Docker pour amd64 et arm64 (Raspberry Pi). Sur `main`, elle publie aussi l'image sur GitHub Container Registry (`ghcr.io/<owner>/<repo>:latest`).
+
+### Déploiement sur un NAS (image prébuilt)
+
+1. Sur le NAS, récupérez `docker-compose.nas.yml` et `.env.example` (renommé en `.env`) dans un même dossier.
+2. Éditez `.env` : `PUBLIC_URL` (IP fixe du NAS, port 8080), `ADMIN_PIN` et `GITHUB_REPOSITORY` (`owner/repo` en minuscules).
+3. Si le dépôt est privé, connectez-vous une fois : `docker login ghcr.io` (identifiant GitHub + token avec le droit `read:packages`). Sinon, rendez le paquet public dans GitHub > Packages.
+4. Lancez, puis mettez à jour à chaque nouvelle version :
+
+   ```bash
+   docker compose -f docker-compose.nas.yml pull
+   docker compose -f docker-compose.nas.yml up -d
+   ```
+
 
 L'architecture (moteur de jeu pur, minuteurs dérivés de l'état, vues filtrées par client) est décrite dans [CLAUDE.md](CLAUDE.md).
 

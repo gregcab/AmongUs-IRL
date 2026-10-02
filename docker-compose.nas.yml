@@ -1,0 +1,16 @@
+# NAS deployment: pulls the prebuilt image from GHCR, no build on the NAS.
+#   cp .env.example .env   # then edit
+#   docker compose -f docker-compose.nas.yml pull
+#   docker compose -f docker-compose.nas.yml up -d
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY:?Définissez GITHUB_REPOSITORY dans .env (ex. monuser/among-us-irl, en minuscules)}:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      PORT: 8080
+      PUBLIC_URL: ${PUBLIC_URL:?Définissez PUBLIC_URL dans .env (ex. http://192.168.1.10:8080)}
+      ADMIN_PIN: ${ADMIN_PIN:?Définissez ADMIN_PIN dans .env}
