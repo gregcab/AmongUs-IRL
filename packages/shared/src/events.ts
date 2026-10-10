@@ -92,6 +92,8 @@ export interface ClientToServerPayloads {
   "admin:backToLobby": Record<string, never>;
   "admin:updateStation": { stationId: StationId; name: string; location: string };
   "admin:repairSabotage": Record<string, never>;
+  /** New printed QR codes and station codes (stations, emergency): the old sheets stop working. */
+  "admin:renewQrCodes": Record<string, never>;
   /** Manual validation of a task when something went wrong at a station. */
   "admin:completeTask": { playerId: string; taskId: string };
 }
@@ -124,6 +126,7 @@ export const ADMIN_EVENTS = [
   "admin:backToLobby",
   "admin:updateStation",
   "admin:repairSabotage",
+  "admin:renewQrCodes",
   "admin:completeTask",
 ] as const satisfies readonly ClientEventName[];
 

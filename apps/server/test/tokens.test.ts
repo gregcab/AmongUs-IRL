@@ -34,8 +34,11 @@ describe("body tokens", () => {
 describe("station and admin tokens", () => {
   const tokens = new Tokens("secret");
 
-  it("binds the emergency token to the game", () => {
-    expect(tokens.verifyEmergency(tokens.emergencyToken("g1"))).toEqual({ gameId: "g1" });
+  it("binds the emergency and station tokens to the print key", () => {
+    expect(tokens.verifyEmergency(tokens.emergencyToken("k1"))).toEqual({ printKey: "k1" });
+    expect(tokens.verifyStation(tokens.stationToken("k1", "admin"))).toEqual({ printKey: "k1", stationId: "admin" });
+    expect(tokens.verifyStation(tokens.emergencyToken("k1"))).toBeNull();
+    expect(tokens.stationCodes("k1", ["a", "b"])).toEqual(tokens.stationCodes("k1", ["a", "b"]));
     expect(tokens.verifyEmergency(tokens.bodyToken("g1", "p", 1))).toBeNull();
   });
 

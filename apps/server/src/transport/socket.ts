@@ -113,7 +113,7 @@ export class Transport {
   private readonly bodyCodes = new AttemptLimiter();
   /** Wrong station codes and wrong oxygen codes. */
   private readonly stationAttempts = new AttemptLimiter();
-  private codesCache?: { gameId: string; codes: Map<string, string> };
+  private codesCache?: { printKey: string; codes: Map<string, string> };
 
   constructor(
     httpServer: HttpServer,
@@ -132,25 +132,25 @@ export class Transport {
   }
 
   emergencyUrl(state: GameState = this.runtime.state): string {
-    return `${this.opts.publicUrl}/e/${this.opts.tokens.emergencyToken(state.gameId)}`;
+    return `${this.opts.publicUrl}/e/${this.opts.tokens.emergencyToken(state.printKey)}`;
   }
 
   practiceUrl(state: GameState = this.runtime.state): string {
     return `${this.opts.publicUrl}/t/${this.opts.tokens.practiceToken(state.gameId)}`;
   }
 
-  /** Codes printed under the station QR codes of the current game. */
-  private stationCodes(gameId: string): Map<string, string> {
-    if (this.codesCache?.gameId !== gameId) this.codesCache = { gameId, codes: this.opts.tokens.stationCodes(gameId, STATION_IDS) };
+  /** Codes printed under the station QR codes (constant until the GM renews them). */
+  private stationCodes(printKey: string): Map<string, string> {
+    if (this.codesCache?.printKey !== printKey) this.codesCache = { printKey, codes: this.opts.tokens.stationCodes(printKey, STATION_IDS) };
     return this.codesCache.codes;
   }
 
   /** Stations to print for the current game and settings. */
   printableStations(state: GameState = this.runtime.state): PrintableStation[] {
-    const codes = this.stationCodes(state.gameId);
+    const codes = this.stationCodes(state.printKey);
     return enabledStations(state).map((st) => ({
       ...st,
-      url: `${this.opts.publicUrl}/s/${this.opts.tokens.stationToken(state.gameId, st.id)}`,
+      url: `${this.opts.publicUrl}/s/${this.opts.tokens.stationToken(state.printKey, st.id)}`,
       code: codes.get(st.id)!,
     }));
   }
@@ -312,7 +312,9 @@ export class Transport {
     if (typeof at.token === "string") {
       const decoded = this.opts.tokens.verifyStation(at.token);
       if (!decoded || !isStationId(decoded.stationId)) return { code: "INVALID_TOKEN", message: "QR de station invalide" };
-      if (decoded.gameId !== s.gameId) return { code: "INVALID_TOKEN", message: "QR de station périmé : demandez au MJ de réimprimer les stations" };
+      if (decoded.printKey !== s.printKey) {
+        return { code: "INVALID_TOKEN", message: "QR de station périmé : les QR ont été renouvelés, demandez au MJ de réimprimer les stations" };
+      }
       return decoded.stationId;
     }
     if (typeof at.code !== "string") return badRequest();
@@ -321,7 +323,7 @@ export class Transport {
     if (locked > 0) return rateLimited(locked);
     const code = at.code.replace(/\D/g, "");
     let found: StationId | undefined;
-    for (const [id, expected] of this.stationCodes(s.gameId)) if (safeEqual(code, expected) && isStationId(id)) found = id;
+    for (const [id, expected] of this.stationCodes(s.printKey)) if (safeEqual(code, expected) && isStationId(id)) found = id;
     if (!found) {
       this.stationAttempts.fail(playerId, now);
       return { code: "INVALID_TOKEN", message: "Code de station inconnu : relis le code sous le QR" };
@@ -418,6 +420,7 @@ export class Transport {
       case "admin:advancePhase":
       case "admin:backToLobby":
       case "admin:repairSabotage":
+      case "admin:renewQrCodes":
         return { type: name };
       case "admin:updateStation": {
         const stationId = str(p.stationId);

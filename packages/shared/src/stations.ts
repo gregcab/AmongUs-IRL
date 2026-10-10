@@ -2,7 +2,8 @@ import type { GameParams } from "./params";
 import { TASK_DEFS, type TaskType } from "./tasks";
 
 // A station is a physical spot with a printed QR code (`/s/:token`) where players repair
-// sabotages or do their tasks. Tokens are bound to the game and change with it.
+// sabotages or do their tasks. Tokens are bound to `GameState.printKey`: printed once, they
+// stay valid from one game to the next until the game master renews them.
 
 export const SABOTAGE_KINDS = ["reactor", "oxygen", "lights", "comms"] as const;
 export type SabotageKind = (typeof SABOTAGE_KINDS)[number];

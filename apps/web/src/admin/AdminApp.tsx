@@ -170,7 +170,7 @@ function Dashboard({ view, send, onLogout }: { view: AdminView; send: AdminSend;
         )}
 
         <section className="panel stack admin-wide">
-          <StationsPanel stations={view.stations} send={send} />
+          <StationsPanel stations={view.stations} send={send} inLobby={view.phase === "LOBBY"} confirmThen={confirmThen} />
         </section>
 
       </div>
@@ -436,7 +436,17 @@ function MeetingPanel({ view }: { view: AdminView }) {
   );
 }
 
-function StationsPanel({ stations, send }: { stations: Station[]; send: AdminSend }) {
+function StationsPanel({
+  stations,
+  send,
+  inLobby,
+  confirmThen,
+}: {
+  stations: Station[];
+  send: AdminSend;
+  inLobby: boolean;
+  confirmThen: (message: string, name: string, payload?: unknown) => void;
+}) {
   return (
     <>
       <h3>Stations</h3>
@@ -445,8 +455,20 @@ function StationsPanel({ stations, send }: { stations: Station[]; send: AdminSen
       ) : (
         <>
           <p className="muted small" style={{ margin: 0 }}>
-            Nom et lieu affichés aux joueurs. Réimprimez les QR après chaque « Rejouer » : ils changent à chaque partie.
+            Nom et lieu affichés aux joueurs. Les QR et codes imprimés (stations, urgence) restent valables d'une partie à l'autre.
           </p>
+          {inLobby && (
+            <div>
+              <button
+                className="btn secondary small-btn"
+                onClick={() =>
+                  confirmThen("Renouveler tous les QR imprimés ? Il faudra réimprimer les stations et le QR d'urgence.", "admin:renewQrCodes")
+                }
+              >
+                Renouveler les QR
+              </button>
+            </div>
+          )}
           <div className="stations-grid">
             {stations.map((st) => (
               <StationRow key={st.id} station={st} send={send} />

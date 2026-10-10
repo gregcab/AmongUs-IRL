@@ -72,8 +72,8 @@ export function registerRest(app: FastifyInstance, opts: RestOptions): void {
     "/api/emergency",
     scanRoute((playerId, body) => {
       const decoded = tokens.verifyEmergency(tokenOf(body));
-      if (!decoded || decoded.gameId !== runtime.state.gameId) {
-        return { code: "INVALID_TOKEN", message: "QR code d'urgence périmé : demandez au MJ de le réimprimer" };
+      if (!decoded || decoded.printKey !== runtime.state.printKey) {
+        return { code: "INVALID_TOKEN", message: "QR code d'urgence périmé : les QR ont été renouvelés, demandez au MJ de le réimprimer" };
       }
       return { type: "player:emergency", playerId };
     }),

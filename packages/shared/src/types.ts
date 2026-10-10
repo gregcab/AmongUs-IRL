@@ -139,6 +139,8 @@ export interface GameState {
   log: LogEntry[];
   /** Game-master names and locations of the stations (kept across games). */
   stationSetup?: Partial<Record<StationId, StationSetup>>;
+  /** Key of the printed QR codes (stations, emergency): kept across games, changed only by the GM. */
+  printKey: string;
   sabotage?: ActiveSabotage;
   sabotageCooldownEndsAt?: number;
   /** Fingers held on a station: player id → hold expiry (renewed by heartbeats). */

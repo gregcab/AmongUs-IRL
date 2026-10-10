@@ -1,6 +1,7 @@
 import { DEFAULT_PARAMS, resolveImpostorCount, SKIP_VOTE, TASK_DEFS, validateParams, type StationId } from "@among-us/shared";
 import { describe, expect, it } from "vitest";
 import { adminView, computeEjection, playerView, reduce, timersFromState, tvView, voteOutcome } from "../src/engine";
+import { upgradeState } from "../src/engine/state";
 import { Harness } from "./harness";
 
 const FAST = { roleRevealSeconds: 5, deathDelaySeconds: 10, killCooldownSeconds: 30 };
@@ -495,6 +496,22 @@ describe("victory", () => {
 });
 
 describe("admin", () => {
+  it("keeps the printed QR key across games until the game master renews it from the lobby", () => {
+    const h = new Harness(FAST);
+    const key = h.state.printKey;
+    expect(key).toBe(h.state.gameId);
+    h.startGame(7);
+    expect(h.try({ type: "admin:renewQrCodes" }).error?.code).toBe("WRONG_PHASE");
+    h.do({ type: "admin:backToLobby" });
+    expect(h.state.gameId).not.toBe(key);
+    expect(h.state.printKey).toBe(key);
+    h.do({ type: "admin:renewQrCodes" });
+    expect(h.state.printKey).not.toBe(key);
+    // Snapshots saved before the print key existed keep their printed sheets valid.
+    const { printKey: _dropped, ...old } = h.state;
+    expect(upgradeState(old as never).printKey).toBe(h.state.gameId);
+  });
+
   it("declares deaths, revives, ends and returns to lobby", () => {
     const h = new Harness(FAST);
     const { crew } = h.startGame(7);

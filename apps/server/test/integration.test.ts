@@ -225,6 +225,29 @@ describe("server integration", () => {
     expect(mine.players.map((p) => p.scanOk)).toEqual([true, false]);
   });
 
+  it("keeps the printed QR codes from one game to the next until they are renewed", async () => {
+    const ps = await players(4);
+    const mj = await admin();
+    const before = { stations: app.transport.printableStations(), emergency: app.transport.emergencyUrl() };
+    const token = before.stations.find((st) => st.id === "card")!.url.split("/s/")[1]!;
+    await mj.ok("admin:start", { force: true });
+    await ps[0]!.c.until((v) => v.phase === "PLAYING", 3000);
+    await mj.ok("admin:endGame", { winner: "crew" });
+    await mj.ok("admin:backToLobby");
+    expect(app.transport.printableStations()).toEqual(before.stations);
+    expect(app.transport.emergencyUrl()).toBe(before.emergency);
+    expect(await ps[0]!.c.ok("station:open", { at: { token } })).toEqual({ stationId: "card" });
+
+    await mj.ok("admin:renewQrCodes");
+    const after = app.transport.printableStations();
+    expect(after.every((st, i) => st.url !== before.stations[i]!.url)).toBe(true);
+    expect(app.transport.emergencyUrl()).not.toBe(before.emergency);
+    const stale = await ps[0]!.c.send("station:open", { at: { token } });
+    expect(!stale.ok && stale.error.message).toMatch(/périmé/);
+    const oldEmergency = before.emergency.split("/e/")[1]!;
+    expect((await post("/api/emergency", { token: oldEmergency }, { [SESSION_HEADER]: ps[0]!.token })).status).toBe(400);
+  });
+
   it("opens stations by QR token or printed code and repairs a sabotage", async () => {
     const ps = await players(5);
     const mj = await admin();

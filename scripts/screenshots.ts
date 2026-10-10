@@ -109,7 +109,7 @@ async function openSabotageMenu(page: Page): Promise<void> {
 
 async function play(browser: Browser, url: string, app: App): Promise<void> {
   const adminToken = app.tokens.adminToken(PIN);
-  const stationUrl = (id: string) => `${url}/s/${app.tokens.stationToken(app.runtime.state.gameId, id)}`;
+  const stationUrl = (id: string) => `${url}/s/${app.tokens.stationToken(app.runtime.state.printKey, id)}`;
   const admin = await new TestClient(url).connected();
   await admin.ok("admin:auth", { pin: PIN });
   await admin.ok("admin:updateParams", {

@@ -71,38 +71,38 @@ export class Tokens {
     return candidates.filter((id) => [current, current - 1].some((slot) => safeEqual(this.bodyCode(gameId, id, slot), code)));
   }
 
-  /** Printed emergency meeting QR, bound to the game. */
-  emergencyToken(gameId: string): string {
-    return this.seal(`E|${gameId}`);
+  /** Printed emergency meeting QR, bound to the print key (constant across games). */
+  emergencyToken(printKey: string): string {
+    return this.seal(`E|${printKey}`);
   }
 
-  verifyEmergency(token: unknown): { gameId: string } | null {
+  verifyEmergency(token: unknown): { printKey: string } | null {
     const parts = this.open(token)?.split("|");
     if (!parts || parts.length !== 2 || parts[0] !== "E") return null;
-    return { gameId: parts[1]! };
+    return { printKey: parts[1]! };
   }
 
-  /** Printed station QR (`/s/:token`), bound to the game and the station. */
-  stationToken(gameId: string, stationId: string): string {
-    return this.seal(`S|${gameId}|${stationId}`);
+  /** Printed station QR (`/s/:token`), bound to the print key and the station. */
+  stationToken(printKey: string, stationId: string): string {
+    return this.seal(`S|${printKey}|${stationId}`);
   }
 
-  verifyStation(token: unknown): { gameId: string; stationId: string } | null {
+  verifyStation(token: unknown): { printKey: string; stationId: string } | null {
     const parts = this.open(token)?.split("|");
     if (!parts || parts.length !== 3 || parts[0] !== "S") return null;
-    return { gameId: parts[1]!, stationId: parts[2]! };
+    return { printKey: parts[1]!, stationId: parts[2]! };
   }
 
   /**
    * 4-digit codes printed under the station QR codes, typed in the app when the camera opens
-   * another browser. Derived from the game, and distinct from one another within a game.
+   * another browser. Derived from the print key, and distinct from one another.
    */
-  stationCodes(gameId: string, stationIds: readonly string[]): Map<string, string> {
+  stationCodes(printKey: string, stationIds: readonly string[]): Map<string, string> {
     const codes = new Map<string, string>();
     const used = new Set<string>();
     for (const id of stationIds) {
       for (let salt = 0; ; salt++) {
-        const digest = createHmac("sha256", this.secret).update(`SC|${gameId}|${id}|${salt}`).digest();
+        const digest = createHmac("sha256", this.secret).update(`SC|${printKey}|${id}|${salt}`).digest();
         const code = String(digest.readUInt32BE(0) % 10000).padStart(4, "0");
         if (used.has(code)) continue;
         used.add(code);

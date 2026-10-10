@@ -302,7 +302,7 @@ Pendant toute la phase `MEETING`, `player:declareDeath` est refusé (bouton dés
 - **Lobby** : configuration des paramètres (partie, tâches, sabotages), liste des joueurs (exclure, renommer, « scan OK »), lancer (normal ou forcé), pages imprimables du QR d'urgence et des stations.
 - **Stations** (toutes phases) : nom et lieu de chaque station utilisée par les réglages (`admin:updateStation`).
 - **En jeu** : tableau de tous les joueurs (couleur, pseudo, rôle, statut, échéance de mort), cooldowns en cours (kill, urgence, sabotage), sabotage en cours (auteur, codes O2), barre de progression réelle des tâches et tâches de chaque joueur, quotas d'urgence, phase et minuteur, journal d'événements en direct.
-- **Actions** : `admin:callMeeting { bodyOfId? }`, `admin:advancePhase`, `admin:declareDeath { playerId }` (mort effective immédiate), `admin:revive { playerId }` (retour à `ALIVE`, uniquement depuis `DYING`, `BODY` ou `GHOST` non éjecté), `admin:endGame { winner }`, `admin:backToLobby`, `admin:repairSabotage` (répare le sabotage en cours), `admin:completeTask { playerId, taskId }` (validation manuelle d'une tâche en secours).
+- **Actions** : `admin:callMeeting { bodyOfId? }`, `admin:advancePhase`, `admin:declareDeath { playerId }` (mort effective immédiate), `admin:revive { playerId }` (retour à `ALIVE`, uniquement depuis `DYING`, `BODY` ou `GHOST` non éjecté), `admin:endGame { winner }`, `admin:backToLobby`, `admin:repairSabotage` (répare le sabotage en cours), `admin:renewQrCodes` (lobby uniquement : renouvelle tous les QR et codes imprimés, §17), `admin:completeTask { playerId, taskId }` (validation manuelle d'une tâche en secours).
 - Toute action MJ est journalisée comme les autres.
 
 ### 7.16 Écran partagé (`/tv`)
@@ -355,6 +355,7 @@ admin:endGame       { winner: "crew" | "impostors" }
 admin:backToLobby   {}
 admin:updateStation { stationId, name, location }
 admin:repairSabotage {}
+admin:renewQrCodes  {}
 admin:completeTask  { playerId, taskId }
 ```
 
@@ -439,6 +440,7 @@ interface GameState {
   winner?: "crew" | "impostors";
   winReason?: "impostorsOut" | "parity" | "tasks" | "reactor" | "oxygen" | "admin";
   stationSetup?: Partial<Record<StationId, { name: string; location: string }>>;
+  printKey: string;                 // clé des QR imprimés (§17), conservée d'une partie à l'autre
   sabotage?: ActiveSabotage;        // §18
   sabotageCooldownEndsAt?: number;
   holds?: Partial<Record<StationId, Record<string, number>>>;  // doigts posés : joueur → expiration
@@ -545,7 +547,7 @@ Après chaque étape : lancer les tests et vérifier le build Docker.
 
 ## 17. Stations
 
-- Une station est un lieu physique avec un QR code imprimé `PUBLIC_URL/s/<token>`, jeton `S|gameId|stationId` signé HMAC : il change à chaque nouvelle partie (réimprimer après « Rejouer »). Sous chaque QR est imprimé un **code à 4 chiffres** (dérivé de la partie, distinct pour chaque station), à taper dans le jeu (« Code d'une station ») quand l'appareil photo ouvre un autre navigateur.
+- Une station est un lieu physique avec un QR code imprimé `PUBLIC_URL/s/<token>`, jeton `S|printKey|stationId` signé HMAC. `printKey` est conservée d'une partie à l'autre : les QR des stations et le QR d'urgence (`E|printKey`) s'impriment une fois pour toutes. Le MJ peut les renouveler depuis le lobby (« Renouveler les QR », `admin:renewQrCodes`) : les anciennes feuilles sont alors refusées (« périmé ») et il faut réimprimer. Le QR d'essai de la TV reste lié à la partie. Sous chaque QR est imprimé un **code à 4 chiffres** (dérivé de `printKey`, distinct pour chaque station), à taper dans le jeu (« Code d'une station ») quand l'appareil photo ouvre un autre navigateur.
 - Catalogue fixe (`packages/shared/src/stations.ts`) : 7 stations de sabotage (Réacteur gauche et droit, O2 filtre et réserve, Admin, Électricité, Communications) et 13 stations de tâches (§19). Une station n'est « utilisée » que si son sabotage ou sa tâche est activé ; seules les stations utilisées sont affichées et imprimées.
 - Le MJ donne à chaque station un nom et un lieu (conservés d'une partie à l'autre) ; `GET /api/print/stations` imprime toutes les stations utilisées (QR, nom, lieu, code, rôle de la station).
 - Scanner une station ouvre l'application joueur sur l'écran de la station (le jeton accompagne chaque commande de station ; le transport le vérifie). Sans session sur ce navigateur : même message que `/r/:token`, avec le conseil de taper le code. Une station ne sert que pendant `PLAYING` (et en réunion pour les tâches si `freezeTasksDuringMeeting = false`) ; une réunion referme l'écran de station.

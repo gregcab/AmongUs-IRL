@@ -57,6 +57,7 @@ export type Command =
   | { type: "admin:backToLobby" }
   | { type: "admin:updateStation"; stationId: StationId; name: string; location: string }
   | { type: "admin:repairSabotage" }
+  | { type: "admin:renewQrCodes" }
   | { type: "admin:completeTask"; playerId: string; taskId: string }
   // Scheduler
   | { type: "tick:phaseEnd"; key: string }

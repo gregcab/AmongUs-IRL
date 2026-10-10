@@ -121,6 +121,8 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return updateStation(c, cmd.stationId, cmd.name, cmd.location);
     case "admin:repairSabotage":
       return adminRepair(c);
+    case "admin:renewQrCodes":
+      return renewQrCodes(c);
     case "admin:completeTask":
       return afterTask(c, adminCompleteTask(c, cmd.playerId, cmd.taskId));
     case "tick:phaseEnd":
@@ -741,6 +743,13 @@ function adminEndGame(c: Ctx, winner: Team): Outcome {
   if (winner !== "crew" && winner !== "impostors") return fail("BAD_REQUEST", "Vainqueur invalide");
   c.log("Fin de partie décidée par le MJ");
   endGame(c, winner, "admin");
+}
+
+/** Invalidates every printed QR code and station code (a photo of a sheet would work forever). */
+function renewQrCodes(c: Ctx): Outcome {
+  if (c.s.phase !== "LOBBY") return fail("WRONG_PHASE", "Renouvelez les QR depuis le lobby");
+  c.s.printKey = c.rng.id();
+  c.log("QR imprimés renouvelés : réimprimez les stations et le QR d'urgence");
 }
 
 function backToLobby(c: Ctx): Outcome {

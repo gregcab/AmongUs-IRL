@@ -21,6 +21,7 @@ export function createInitialState(gameId: string, params: GameParams = DEFAULT_
     timeline: [],
     timeScale,
     log: [],
+    printKey: gameId,
   };
 }
 
@@ -29,7 +30,8 @@ export function createInitialState(gameId: string, params: GameParams = DEFAULT_
  * their default value.
  */
 export function upgradeState(saved: GameState): GameState {
-  return { ...saved, params: { ...structuredClone(DEFAULT_PARAMS), ...saved.params } };
+  // Sheets printed before `printKey` existed were bound to the game id: they stay valid.
+  return { ...saved, params: { ...structuredClone(DEFAULT_PARAMS), ...saved.params }, printKey: saved.printKey ?? saved.gameId };
 }
 
 /** DYING players still count as alive for everyone else and for win conditions. */
