@@ -12,33 +12,42 @@ const ENDPOINT: Record<ScanType, string> = {
   practice: "/api/practice",
 };
 
+/** Posts a scanned body, emergency or practice token with the stored session. */
+export async function sendScan(
+  type: ScanType,
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ ok: true } | { ok: false; code?: string; message: string }> {
+  const session = getSession();
+  if (!session) return { ok: false, code: "NOT_AUTHENTICATED", message: "Session introuvable" };
+  try {
+    const res = await fetch(ENDPOINT[type], {
+      method: "POST",
+      headers: { "content-type": "application/json", [SESSION_HEADER]: session },
+      body: JSON.stringify({ token }),
+      signal,
+    });
+    const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code: string; message: string } } | null;
+    if (res.ok && body?.ok) return { ok: true };
+    return { ok: false, code: body?.error?.code, message: body?.error?.message ?? "Erreur inconnue" };
+  } catch {
+    return { ok: false, message: "Serveur injoignable" };
+  }
+}
+
 /** Landing page of a QR scan made with the phone's native camera. */
 export function ScanPage({ type, token }: { type: ScanType; token: string }) {
   const [state, setState] = useState<State>({ kind: "sending" });
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const session = getSession();
-    if (!session) {
-      setState({ kind: "no-session" });
-      return;
-    }
     const controller = new AbortController();
-    fetch(ENDPOINT[type], {
-      method: "POST",
-      headers: { "content-type": "application/json", [SESSION_HEADER]: session },
-      body: JSON.stringify({ token }),
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code: string; message: string } } | null;
-        if (res.ok && body?.ok) setState({ kind: "ok" });
-        else if (body?.error?.code === "NOT_AUTHENTICATED") setState({ kind: "no-session" });
-        else setState({ kind: "error", message: body?.error?.message ?? "Erreur inconnue" });
-      })
-      .catch((e: unknown) => {
-        if ((e as { name?: string }).name !== "AbortError") setState({ kind: "error", message: "Serveur injoignable" });
-      });
+    void sendScan(type, token, controller.signal).then((res) => {
+      if (controller.signal.aborted) return;
+      if (res.ok) setState({ kind: "ok" });
+      else if (res.code === "NOT_AUTHENTICATED") setState({ kind: "no-session" });
+      else setState({ kind: "error", message: res.message });
+    });
     return () => controller.abort();
   }, [type, token]);
 

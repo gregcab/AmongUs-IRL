@@ -199,6 +199,11 @@ export class Transport {
         typeof p.index === "number" ? { type: "station:switch", playerId, stationId, index: p.index } : null,
       ),
     );
+    socket.on("station:tune", (payload, ack) =>
+      this.onStation(socket, payload, ack, (playerId, stationId, p) =>
+        typeof p.frequency === "number" ? { type: "station:tune", playerId, stationId, frequency: p.frequency } : null,
+      ),
+    );
     socket.on("task:complete", (payload, ack) =>
       this.onStation(socket, payload, ack, (playerId, stationId, p) =>
         typeof p.taskId === "string" ? { type: "task:complete", playerId, stationId, taskId: p.taskId } : null,

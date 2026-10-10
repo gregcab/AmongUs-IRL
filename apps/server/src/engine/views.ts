@@ -93,6 +93,7 @@ export function publicSabotage(s: GameState, readerId?: string): PublicSabotage 
     if (readerId && active.codeReaders?.includes(readerId)) view.codes = { ...active.codes };
   }
   if (active.switches) view.switches = [...active.switches];
+  if (active.frequency !== undefined) view.frequency = active.frequency;
   return view;
 }
 

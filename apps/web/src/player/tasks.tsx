@@ -12,7 +12,7 @@ import {
 import { useState } from "react";
 import { serverNow, useNow } from "../lib/clock";
 import { StationName, stationById } from "../lib/stations";
-import { TaskBar } from "../lib/taskbar";
+import { CrewTaskBar } from "../lib/taskbar";
 import { HoldPad } from "../lib/ui";
 import { Antenna, CardSwipe, DataTransfer, Distributor, FuelHold, SafeCode, Simon, Wires } from "./minigames";
 import type { Send } from "./PlayerApp";
@@ -23,6 +23,11 @@ function nextStations(task: PlayerTask, stations: Station[]): Station[] {
   return taskStations(task.type, task.step).map((id) => stationById(stations, id));
 }
 
+/** The radio is down: the living can neither see nor do their tasks (ghosts go on). */
+export function commsCut(view: PlayerView): boolean {
+  return view.phase === "PLAYING" && view.sabotage?.kind === "comms" && view.me.status !== "GHOST";
+}
+
 /** The player's list: identical for crewmates and impostors (whose list is fake). */
 export function TaskList({ view }: { view: PlayerView }) {
   const tasks = view.tasks ?? [];
@@ -30,9 +35,20 @@ export function TaskList({ view }: { view: PlayerView }) {
   // During a sabotage the list folds, so the game buttons stay on screen.
   const [unfolded, setUnfolded] = useState(false);
   const folded = view.sabotage !== undefined && !unfolded;
+  if (commsCut(view)) {
+    return (
+      <div className="panel stack task-panel">
+        <CrewTaskBar view={view} />
+        <span className="eyebrow">Mes tâches</span>
+        <p className="muted small comms-static" style={{ margin: 0 }}>
+          Communications coupées : liste indisponible jusqu'à la réparation.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="panel stack task-panel">
-      {view.taskBar && <TaskBar bar={view.taskBar} />}
+      <CrewTaskBar view={view} />
       <div className="row spread">
         <span className="eyebrow">Mes tâches</span>
         {view.sabotage ? (
@@ -89,12 +105,15 @@ export function TaskStation({ view, station, send }: { view: PlayerView; station
     if (ok) setJustDone(`${t.id}:${t.step}`);
   };
 
+  // A task begun (station opened) before the radio went down may finish; the server checks it too.
+  const cut = commsCut(view) && !(station.openedAt < (view.sabotage?.startedAt ?? 0));
   if (def.coop) {
     return (
       <>
         <p className="muted" style={{ margin: 0 }}>
           {def.help}
         </p>
+        {cut && <CommsCut onlyFinish />}
         {type === "doubleKey" ? (
           <DoubleKey view={view} station={station} send={send} task={task} />
         ) : (
@@ -104,6 +123,7 @@ export function TaskStation({ view, station, send }: { view: PlayerView; station
     );
   }
 
+  if (cut) return <CommsCut />;
   if (!task) return <div className="panel center big station-idle">Aucune tâche pour toi ici.</div>;
   if (task.done) {
     return (
@@ -154,6 +174,17 @@ export function TaskStation({ view, station, send }: { view: PlayerView; station
       {type === "fuel" && <FuelHold key={key} empty={task.step === 1} onDone={done} />}
       {type === "card" && <CardSwipe key={key} onDone={done} />}
       {type === "antenna" && <Antenna key={key} onDone={done} />}
+    </div>
+  );
+}
+
+function CommsCut({ onlyFinish }: { onlyFinish?: boolean }) {
+  return (
+    <div className="panel stack center station-idle comms-static">
+      <div className="big">Communications coupées</div>
+      <p className="muted" style={{ margin: 0 }}>
+        {onlyFinish ? "Seule une manœuvre déjà commencée peut se terminer avant la réparation." : "Impossible de faire ta tâche avant la réparation de la radio."}
+      </p>
     </div>
   );
 }

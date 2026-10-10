@@ -1,4 +1,6 @@
 import {
+  COMMS_DIAL_MAX,
+  COMMS_TOLERANCE,
   OXYGEN_CODE_STATIONS,
   SABOTAGE_STATIONS,
   stationDef,
@@ -16,6 +18,8 @@ import { TaskStation } from "./tasks";
 export interface OpenStation {
   id: StationId;
   at: StationAccess;
+  /** Server time of the opening: a task begun before a communications sabotage may finish. */
+  openedAt: number;
 }
 
 /** Screen shown after scanning a station's QR code (or typing its code). */
@@ -91,6 +95,8 @@ function StationContent({ view, station, send }: { view: PlayerView; station: Op
       <ReactorPad view={view} station={station} send={send} />
     ) : kind === "oxygen" ? (
       <OxygenCode view={view} station={station} send={send} />
+    ) : kind === "comms" ? (
+      <RadioDial view={view} station={station} send={send} />
     ) : (
       <LightSwitches view={view} station={station} send={send} />
     );
@@ -214,6 +220,56 @@ function LightSwitches({ view, station, send }: { view: PlayerView; station: Ope
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Communications: turn the dial until the static clears, then hold it there for a second. */
+function RadioDial({ view, station, send }: { view: PlayerView; station: OpenStation; send: Send }) {
+  const target = view.sabotage?.frequency ?? 0;
+  // Starts at the end of the dial farthest from the target.
+  const [value, setValue] = useState(() => (target < COMMS_DIAL_MAX / 2 ? COMMS_DIAL_MAX : 0));
+  const [busy, setBusy] = useState(false);
+  const gap = Math.abs(value - target);
+  const tuned = gap <= COMMS_TOLERANCE;
+  const clarity = Math.max(0, 1 - gap / (COMMS_DIAL_MAX / 2));
+  useEffect(() => {
+    if (!tuned || busy) return;
+    const t = setTimeout(async () => {
+      setBusy(true);
+      await send("station:tune", { at: station.at, frequency: value });
+      setBusy(false);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [tuned, busy, value, send, station.at]);
+  // A sine wave buried in noise that fades as the dial gets closer.
+  const points = Array.from({ length: 61 }, (_, i) => {
+    const x = (i / 60) * 200;
+    const noise = (1 - clarity) * 26 * Math.sin(i * 12.9898 + value * 78.233) * Math.sin(i * 4.1 + value);
+    const y = 40 + clarity * 22 * Math.sin((i / 60) * Math.PI * 6) + noise;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const mhz = (88 + (value / COMMS_DIAL_MAX) * 20).toFixed(1);
+  return (
+    <div className="panel stack center">
+      <div className="big">Règle la radio</div>
+      <svg className={`radio-wave${tuned ? " tuned" : ""}`} viewBox="0 0 200 80" aria-hidden>
+        <polyline points={points} />
+      </svg>
+      <div className="radio-freq">{mhz} MHz</div>
+      <input
+        className="antenna-slider"
+        type="range"
+        min={0}
+        max={COMMS_DIAL_MAX}
+        step={1}
+        value={value}
+        aria-label="Fréquence de la radio"
+        onChange={(e) => setValue(Number(e.target.value))}
+      />
+      <p className={tuned ? "check" : "muted"} style={{ margin: 0 }}>
+        {tuned ? "Signal clair : ne bouge plus…" : "Tourne le bouton jusqu'à ce que le grésillement disparaisse."}
+      </p>
     </div>
   );
 }

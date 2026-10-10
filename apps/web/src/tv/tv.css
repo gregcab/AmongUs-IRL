@@ -324,6 +324,11 @@
   animation: none;
 }
 
+.tv-sabotage-comms {
+  background: radial-gradient(ellipse at 50% 40%, rgba(59, 157, 255, 0.25), transparent 70%);
+  animation: none;
+}
+
 @keyframes tv-sabotage-pulse {
   50% {
     background-color: rgba(120, 0, 10, 0.25);

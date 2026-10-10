@@ -881,6 +881,69 @@ describe("tasks", () => {
     expect(timersFromState(h.state).map((t) => t.id)).not.toContain("shield");
   });
 
+  it("blocks the tasks of the living during a communications sabotage, ghosts and begun tasks excepted", () => {
+    const { h, crew, impostors } = playing(7, { resumeCountdownSeconds: 5 });
+    // crew[0] becomes a ghost.
+    h.kill(crew[0]!);
+    h.do({ type: "player:reportBody", playerId: crew[1]!, bodyOfId: crew[0]! });
+    for (let i = 0; i < 4; i++) h.do({ type: "admin:advancePhase" });
+    h.seconds(5);
+    expect(h.state.phase).toBe("PLAYING");
+    h.do({ type: "station:open", playerId: crew[2]!, stationId: "card" }); // begun before the sabotage
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "comms" });
+    const frequency = h.state.sabotage!.frequency!;
+    expect(frequency).toBeGreaterThanOrEqual(15);
+    expect(frequency).toBeLessThanOrEqual(85);
+    expect(playerView(h.state, crew[1]!).sabotage?.frequency).toBe(frequency);
+    expect(tvView(h.state, "http://x").taskBar).toBeUndefined();
+    expect(playerView(h.state, crew[1]!).taskBar).toBeUndefined();
+    expect(adminView(h.state, "http://x", "http://x/e").taskProgress.total).toBeGreaterThan(0);
+
+    h.do({ type: "station:open", playerId: crew[1]!, stationId: "card" });
+    expect(h.try({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" }).error?.code).toBe("SABOTAGED");
+    expect(h.try({ type: "task:complete", playerId: impostors[1]!, stationId: "card", taskId: "t1" }).error?.code).toBe("SABOTAGED"); // fake tasks too
+    h.do({ type: "task:complete", playerId: crew[2]!, stationId: "card", taskId: "t1" });
+    h.do({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" }); // ghosts go on
+    expect([crew[0], crew[2]].map((id) => tasksOf(h, id!)[0]!.done)).toEqual([true, true]);
+
+    // Repair: the drawn frequency within the tolerance, by the living only.
+    expect(h.try({ type: "station:tune", playerId: crew[1]!, stationId: "electrical", frequency }).error?.code).toBe("WRONG_STATION");
+    expect(h.try({ type: "station:tune", playerId: crew[0]!, stationId: "comms", frequency }).error?.code).toBe("NOT_ALLOWED");
+    expect(h.try({ type: "station:tune", playerId: crew[1]!, stationId: "comms", frequency: frequency + 4 }).error?.code).toBe("WRONG_CODE");
+    h.clearEvents();
+    h.do({ type: "station:tune", playerId: crew[1]!, stationId: "comms", frequency: frequency - 3 });
+    expect(h.state.sabotage).toBeUndefined();
+    expect(h.events.map((e) => e.name)).toEqual(["sabotage:repaired"]);
+    h.do({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" });
+    expect(tvView(h.state, "http://x").taskBar).toBeDefined();
+  });
+
+  it("lets cooperative tasks already begun finish during a communications sabotage", () => {
+    const { h, crew, impostors } = playing(7, { enabledTasks: ["doubleKey", "shield"], commonTasks: 0, longTasks: 0, shortTasks: 2 });
+    const hold = (id: string) => h.do({ type: "station:hold", playerId: id, stationId: "shield", holding: true });
+    const task = (id: string, type: string) => tasksOf(h, id).find((t) => t.type === type)!;
+    h.seconds(20);
+    for (const id of crew.slice(0, 3)) hold(id);
+    h.do({ type: "task:keyTurn", playerId: crew[3]!, stationId: "key-a" });
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "comms" });
+
+    // A key may answer a turn already made…
+    h.do({ type: "task:keyTurn", playerId: crew[4]!, stationId: "key-b" });
+    expect([task(crew[3]!, "doubleKey").done, task(crew[4]!, "doubleKey").done]).toEqual([true, true]);
+    // …but not start one.
+    expect(h.try({ type: "task:keyTurn", playerId: crew[0]!, stationId: "key-a" }).error?.code).toBe("SABOTAGED");
+
+    // Fingers already on the shield keep holding; a new one is refused.
+    expect(h.try({ type: "station:hold", playerId: crew[3]!, stationId: "shield", holding: true }).error?.code).toBe("SABOTAGED");
+    for (let t = 0; t < 10; t += 2) {
+      h.seconds(2);
+      if (h.state.shieldDoneAt === undefined) for (const id of crew.slice(0, 3)) hold(id);
+    }
+    expect(crew.slice(0, 3).map((id) => task(id, "shield").done)).toEqual([true, true, true]);
+    expect(h.state.sabotage?.kind).toBe("comms");
+  });
+
   it("gives the crew the win when every crew task is done", () => {
     const { h, crew, impostors } = playing(5, { enabledTasks: ["wires", "safe"], commonTasks: 0, longTasks: 0, shortTasks: 2 });
     for (const id of crew) for (const t of tasksOf(h, id)) if (!(id === crew[0] && t.id === "t2")) finish(h, id, t.id);

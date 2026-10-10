@@ -38,7 +38,7 @@ export function crewProgress(s: GameState): TaskProgress {
 
 /** Task bar as players and the TV may see it, according to `taskBarUpdates`. */
 export function visibleTaskBar(s: GameState): TaskProgress | undefined {
-  if (s.phase === "LOBBY") return undefined;
+  if (s.phase === "LOBBY" || commsDown(s)) return undefined;
   const live = crewProgress(s);
   if (live.total === 0) return undefined;
   if (s.phase === "GAME_OVER") return live;
@@ -50,6 +50,16 @@ export function visibleTaskBar(s: GameState): TaskProgress | undefined {
     case "never":
       return undefined;
   }
+}
+
+/** The radio is down: tasks are blocked for the living (ghosts go on) until it is repaired. */
+export function commsDown(s: GameState): boolean {
+  return s.phase === "PLAYING" && s.sabotage?.kind === "comms";
+}
+
+function commsBlocked(c: Ctx, p: Player): GameError | undefined {
+  if (!commsDown(c.s) || p.status === "GHOST") return undefined;
+  return fail("SABOTAGED", `Communications coupées : tâches impossibles avant la réparation (${stationLabel(c.s, "comms")})`);
 }
 
 export function tasksAllowed(s: GameState): boolean {
@@ -94,7 +104,10 @@ export function resetCoop(s: GameState): void {
 }
 
 export function clearTasks(s: GameState): void {
-  for (const p of Object.values(s.players)) delete p.tasks;
+  for (const p of Object.values(s.players)) {
+    delete p.tasks;
+    delete p.openedStation;
+  }
   s.taskBarSnapshot = undefined;
   resetCoop(s);
 }
@@ -130,6 +143,11 @@ export function completeTask(c: Ctx, playerId: string, stationId: StationId, tas
   if (!stations.includes(stationId)) {
     return fail("WRONG_STATION", `Cette étape se fait à la station ${stations.map((id) => stationLabel(c.s, id)).join(" ou ")}`);
   }
+  // A mini-game begun (station opened) before the radio went down may finish.
+  const opened = p.openedStation;
+  const begun = opened?.stationId === stationId && opened.at < (c.s.sabotage?.startedAt ?? 0);
+  const blocked = begun ? undefined : commsBlocked(c, p);
+  if (blocked) return blocked;
   nextStep(c, p, task);
 }
 
@@ -139,8 +157,12 @@ export function keyTurn(c: Ctx, playerId: string, stationId: StationId): Outcome
   if ("code" in p) return p;
   if (!KEYS.includes(stationId)) return fail("WRONG_STATION", "Pas de clé à cette station");
   const turns = (c.s.keyTurns ??= {});
-  turns[stationId] = { playerId: p.id, at: c.now };
   const partner = turns[KEYS.find((id) => id !== stationId)!];
+  // With the radio down, a key may only answer a turn already made at the other station.
+  const answering = partner !== undefined && partner.playerId !== p.id && c.now - partner.at <= KEY_WINDOW_MS;
+  const blocked = answering ? undefined : commsBlocked(c, p);
+  if (blocked) return blocked;
+  turns[stationId] = { playerId: p.id, at: c.now };
   if (!partner || partner.playerId === p.id || c.now - partner.at > KEY_WINDOW_MS) return;
   for (const id of [p.id, partner.playerId]) {
     const q = c.player(id);
@@ -174,6 +196,9 @@ export function shieldHold(c: Ctx, playerId: string, holding: boolean): Outcome 
   }
   const p = worker(c, playerId);
   if ("code" in p) return p;
+  // With the radio down, only fingers already on the shield keep holding.
+  const blocked = holds[SHIELD]?.[p.id] !== undefined ? undefined : commsBlocked(c, p);
+  if (blocked) return blocked;
   holds[SHIELD] = { ...holds[SHIELD], [p.id]: c.now + HOLD_TIMEOUT_MS };
   updateShield(c);
 }

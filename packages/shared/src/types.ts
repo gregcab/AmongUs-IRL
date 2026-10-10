@@ -31,6 +31,8 @@ export interface Player {
   scanOk?: boolean;
   /** Drawn at game start; an impostor's list is fake (same look, no effect on the bar). */
   tasks?: PlayerTask[];
+  /** Last task station opened during play: a task begun there before a communications sabotage may still finish. */
+  openedStation?: { stationId: StationId; at: number };
 }
 
 export interface PlayerTask {
@@ -111,6 +113,8 @@ export interface ActiveSabotage {
   codeReaders?: string[];
   /** Lights: switch positions; repaired when they are all on. */
   switches?: boolean[];
+  /** Communications: dial position to tune the radio to. */
+  frequency?: number;
 }
 
 export interface GameState {
@@ -193,6 +197,8 @@ export interface PublicSabotage {
   codes?: Partial<Record<StationId, string>>;
   /** Lights: switch positions. */
   switches?: boolean[];
+  /** Communications: dial position to tune the radio to. */
+  frequency?: number;
 }
 
 export interface PublicMeetingResult {

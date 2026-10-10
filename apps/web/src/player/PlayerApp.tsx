@@ -6,10 +6,12 @@ import { getSession, setSession } from "../lib/session";
 import { useGameConnection } from "../lib/socket";
 import { SabotageAlert } from "../lib/stations";
 import { ConnectionBanner, useToast } from "../lib/ui";
-import { useNow } from "../lib/clock";
+import { serverNow, useNow } from "../lib/clock";
+import { parseGameLink } from "../lib/qrScan";
 import { vibrate, VIBRATION } from "../lib/vibration";
 import { armDeviceFeatures, needsGesture } from "../lib/wakeLock";
-import { BodyScreen, GameOverScreen, GhostScreen, JoinScreen, LobbyScreen, PlayingScreen, RoleRevealScreen } from "./screens";
+import { BodyScreen, GameOverScreen, GhostScreen, JoinScreen, LobbyScreen, PlayingScreen, RoleRevealScreen, type ScanFn } from "./screens";
+import { sendScan } from "./ScanPage";
 import { MeetingScreen } from "./meeting";
 import { StationScreen, type OpenStation } from "./station";
 
@@ -133,10 +135,29 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
         if (!res.ok) showToast(res.error.message);
         return false;
       }
-      setStation({ id: res.data.stationId, at });
+      setStation({ id: res.data.stationId, at, openedAt: serverNow() });
       return true;
     },
     [rawSend, showToast],
+  );
+
+  // A QR code read from a photo inside the app: same effect as opening its link.
+  const onScan: ScanFn = useCallback(
+    async (text) => {
+      const link = text ? parseGameLink(text) : null;
+      if (!link) {
+        showToast(text ? "Ce QR code n'appartient pas au jeu" : "Aucun QR code lu : rapproche-toi et réessaie");
+        return;
+      }
+      if (link.kind === "station") {
+        await openStation({ token: link.token });
+        return;
+      }
+      const res = await sendScan(link.kind, link.token);
+      if (!res.ok) showToast(res.message);
+      else if (link.kind === "practice") showToast("Scan OK", "info");
+    },
+    [openStation, showToast],
   );
 
   // A scanned station opens once the player's session is known.
@@ -190,7 +211,7 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
       ) : station && stationUsable ? (
         <StationScreen view={view} station={station} send={send} onClose={closeStation} />
       ) : (
-        <PlayerScreens view={view} send={send} bodyQr={bodyQr} openStation={openStation} />
+        <PlayerScreens view={view} send={send} bodyQr={bodyQr} openStation={openStation} onScan={onScan} />
       );
   } else {
     content = null;
@@ -213,11 +234,13 @@ function PlayerScreens({
   send,
   bodyQr,
   openStation,
+  onScan,
 }: {
   view: PlayerView;
   send: Send;
   bodyQr: ServerToClientPayloads["body:qr"] | null;
   openStation: (at: StationAccess) => Promise<boolean>;
+  onScan: ScanFn;
 }) {
   const { me } = view;
   switch (view.phase) {
@@ -227,8 +250,8 @@ function PlayerScreens({
       return <RoleRevealScreen view={view} />;
     case "PLAYING":
       if (me.status === "BODY") return <BodyScreen view={view} qr={bodyQr} />;
-      if (me.status === "GHOST") return <GhostScreen view={view} send={send} openStation={openStation} />;
-      return <PlayingScreen view={view} send={send} openStation={openStation} />;
+      if (me.status === "GHOST") return <GhostScreen view={view} send={send} openStation={openStation} onScan={onScan} />;
+      return <PlayingScreen view={view} send={send} openStation={openStation} onScan={onScan} />;
     case "MEETING":
       return <MeetingScreen view={view} send={send} />;
     case "GAME_OVER":

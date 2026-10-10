@@ -1,5 +1,5 @@
 import { colorOf, PLAYER_COLORS, type AnonymousView, type PlayerView, type ServerToClientPayloads, type StationAccess } from "@among-us/shared";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { playReadyChime, unlockAudio } from "../lib/audio";
 import { secondsLeft, useNow } from "../lib/clock";
 import { Crewmate } from "../lib/crewmate";
@@ -7,6 +7,7 @@ import { GameOverBlock, ROLE_LABEL, RulesList } from "../lib/game";
 import { SabotageInfo } from "../lib/stations";
 import { setSession } from "../lib/session";
 import { Countdown, HoldButton, HoldToReveal, Logo, PlayerChip, QrCode } from "../lib/ui";
+import { decodeQrFromFile } from "../lib/qrScan";
 import { canVibrate, vibrate, VIBRATION } from "../lib/vibration";
 import { enableWakeLock } from "../lib/wakeLock";
 import type { Send } from "./PlayerApp";
@@ -15,6 +16,9 @@ import { TaskList } from "./tasks";
 
 /** Opens a station from its printed code; resolves to true on success. */
 export type OpenStationFn = (at: StationAccess) => Promise<boolean>;
+
+/** Handles the text of a QR code read from a photo, or null when none was found. */
+export type ScanFn = (text: string | null) => Promise<void>;
 
 const DEATH_HOLD_MS = 1500;
 
@@ -236,7 +240,7 @@ function StatusIndicator({ view }: { view: PlayerView }) {
   return <span className={`indicator${armed ? " armed" : ""}`} aria-hidden />;
 }
 
-export function PlayingScreen({ view, send, openStation }: { view: PlayerView; send: Send; openStation: OpenStationFn }) {
+export function PlayingScreen({ view, send, openStation, onScan }: { view: PlayerView; send: Send; openStation: OpenStationFn; onScan: ScanFn }) {
   const { me, params } = view;
   const now = useNow(500);
   const dying = me.status === "DYING";
@@ -269,6 +273,7 @@ export function PlayingScreen({ view, send, openStation }: { view: PlayerView; s
       </p>
 
       <div className="code-buttons">
+        <ScanButton onScan={onScan} />
         <CodeEntry
           label="Code d'un corps"
           title="Code du corps"
@@ -302,6 +307,43 @@ export function StationCodeEntry({ openStation }: { openStation: OpenStationFn }
       submitLabel="Ouvrir la station"
       onSubmit={(code) => openStation({ code })}
     />
+  );
+}
+
+/**
+ * Opens the phone's camera through a file input (works over plain HTTP, unlike a live
+ * camera feed) and decodes the QR code in the photo without leaving the page.
+ */
+function ScanButton({ onScan }: { onScan: ScanFn }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await onScan(await decodeQrFromFile(file).catch(() => null));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button type="button" className="btn small-btn" disabled={busy} onClick={() => input.current?.click()}>
+        {busy ? "Lecture…" : "Scanner"}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          void onFile(file);
+        }}
+      />
+    </>
   );
 }
 
@@ -397,7 +439,7 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
   );
 }
 
-export function GhostScreen({ view, send, openStation }: { view: PlayerView; send: Send; openStation: OpenStationFn }) {
+export function GhostScreen({ view, send, openStation, onScan }: { view: PlayerView; send: Send; openStation: OpenStationFn; onScan: ScanFn }) {
   return (
     <div className="screen">
       <PlayerChip player={view.me} strike />
@@ -413,6 +455,7 @@ export function GhostScreen({ view, send, openStation }: { view: PlayerView; sen
       {view.tasks && view.tasks.length > 0 && <TaskList view={view} />}
       {view.stations.length > 0 && (
         <div className="code-buttons">
+          <ScanButton onScan={onScan} />
           <StationCodeEntry openStation={openStation} />
         </div>
       )}

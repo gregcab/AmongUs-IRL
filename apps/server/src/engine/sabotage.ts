@@ -1,4 +1,6 @@
 import {
+  COMMS_DIAL_MAX,
+  COMMS_TOLERANCE,
   CRITICAL_SABOTAGES,
   LIGHT_SWITCHES,
   OXYGEN_CODE_STATIONS,
@@ -8,6 +10,7 @@ import {
   type GameState,
   type SabotageKind,
   type StationId,
+  stationDef,
 } from "@among-us/shared";
 import { ALL, fail, type Ctx, type Outcome } from "./ctx";
 import { isAlive, stationLabel } from "./state";
@@ -63,6 +66,11 @@ export function sabotage(c: Ctx, playerId: string, kind: SabotageKind): Outcome 
     while (switches.filter((on) => !on).length < 2) switches[c.rng.int(LIGHT_SWITCHES)] = false;
     active.switches = switches;
   }
+  if (kind === "comms") {
+    // Away from both ends, so the dial always has to move.
+    const margin = Math.round(COMMS_DIAL_MAX * 0.15);
+    active.frequency = margin + c.rng.int(COMMS_DIAL_MAX - 2 * margin + 1);
+  }
   s.sabotage = active;
   // The cooldown restarts once the sabotage is over.
   s.sabotageCooldownEndsAt = undefined;
@@ -73,7 +81,8 @@ export function sabotage(c: Ctx, playerId: string, kind: SabotageKind): Outcome 
 function repair(c: Ctx, by: string): void {
   const kind = c.s.sabotage!.kind;
   c.s.sabotage = undefined;
-  c.s.holds = {};
+  // Fingers on the repair stations go; the shield (a task) keeps charging.
+  for (const id of SABOTAGE_STATIONS[kind]) delete c.s.holds?.[id];
   restartSabotageCooldown(c);
   c.emit(ALL, "sabotage:repaired", { kind });
   c.log(`Sabotage ${SABOTAGE_LABEL[kind]} réparé ${by}`);
@@ -141,10 +150,26 @@ export function stationSwitch(c: Ctx, playerId: string, stationId: StationId, in
   if (switches.every(Boolean)) repair(c, "à l'électricité");
 }
 
-/** Opening the admin station during an oxygen sabotage reveals the codes to that player. */
+/** Communications: the radio dial held on the drawn frequency (the phone checks the hold). */
+export function stationTune(c: Ctx, playerId: string, stationId: StationId, frequency: number): Outcome {
+  const denied = repairer(c, playerId, stationId, "comms");
+  if (denied) return denied;
+  if (!Number.isFinite(frequency)) return fail("BAD_REQUEST", "Fréquence invalide");
+  if (Math.abs(frequency - c.s.sabotage!.frequency!) > COMMS_TOLERANCE) return fail("WRONG_CODE", "Mauvaise fréquence : la radio grésille encore");
+  repair(c, "à la radio");
+}
+
+/**
+ * Opening a task station is remembered (a task begun before a communications sabotage may
+ * finish); opening the admin station during an oxygen sabotage reveals the codes to that player.
+ */
 export function openStation(c: Ctx, playerId: string, stationId: StationId): Outcome {
   const p = c.player(playerId);
   if (!p) return fail("UNKNOWN_PLAYER", "Joueur inconnu");
+  if (c.s.phase === "PLAYING" && stationDef(stationId).task) {
+    p.openedStation = { stationId, at: c.now };
+    return;
+  }
   const active = c.s.sabotage;
   if (c.s.phase !== "PLAYING" || stationId !== "admin" || active?.kind !== "oxygen") return "noop";
   if (active.codeReaders?.includes(p.id)) return "noop";

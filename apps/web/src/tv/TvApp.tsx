@@ -5,7 +5,7 @@ import { AlarmOverlay, GameOverBlock, meetingReason, ResultBlock, SUBPHASE_LABEL
 import { useGameConnection } from "../lib/socket";
 import { Crewmate } from "../lib/crewmate";
 import { SabotageAlert, SabotageInfo } from "../lib/stations";
-import { TaskBar } from "../lib/taskbar";
+import { CrewTaskBar, TaskBar } from "../lib/taskbar";
 import { ConnectionBanner, Countdown, Logo, QrCode } from "../lib/ui";
 import "./tv.css";
 
@@ -117,9 +117,9 @@ function TvContent({ view, lingeringResult }: { view: TvView; lingeringResult: P
       return view.sabotage ? (
         <div className={`tv-center tv-sabotage tv-sabotage-${view.sabotage.kind}`}>
           <SabotageInfo sabotage={view.sabotage} stations={view.stations} large />
-          {view.taskBar && (
+          {(view.taskBar || view.sabotage.kind === "comms") && (
             <div className="tv-taskbar">
-              <TaskBar bar={view.taskBar} large />
+              <CrewTaskBar view={view} large />
             </div>
           )}
         </div>

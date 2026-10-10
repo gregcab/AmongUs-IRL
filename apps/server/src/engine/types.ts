@@ -40,6 +40,7 @@ export type Command =
   | PlayerCommand<"station:hold", { stationId: StationId; holding: boolean }>
   | PlayerCommand<"station:code", { stationId: StationId; code: string }>
   | PlayerCommand<"station:switch", { stationId: StationId; index: number }>
+  | PlayerCommand<"station:tune", { stationId: StationId; frequency: number }>
   | PlayerCommand<"task:complete", { stationId: StationId; taskId: string }>
   | PlayerCommand<"task:keyTurn", { stationId: StationId }>
   | PlayerCommand<"system:connection", { connected: boolean }>

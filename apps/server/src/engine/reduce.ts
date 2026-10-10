@@ -28,6 +28,7 @@ import {
   stationCode,
   stationHold,
   stationSwitch,
+  stationTune,
 } from "./sabotage";
 import { isAlive, nameKey, normalizeName, phaseKey, playersInOrder, stationLabel } from "./state";
 import {
@@ -90,6 +91,8 @@ function handle(c: Ctx, cmd: Command): Outcome {
       return stationCode(c, cmd.playerId, cmd.stationId, cmd.code);
     case "station:switch":
       return stationSwitch(c, cmd.playerId, cmd.stationId, cmd.index);
+    case "station:tune":
+      return stationTune(c, cmd.playerId, cmd.stationId, cmd.frequency);
     case "task:complete":
       return afterTask(c, completeTask(c, cmd.playerId, cmd.stationId, cmd.taskId));
     case "task:keyTurn":
@@ -536,6 +539,8 @@ function startMeeting(c: Ctx, type: MeetingType, reporterId?: string, bodyOfId?:
   const players = playersInOrder(s);
   for (const p of players) if (p.status === "DYING") finalizeDeath(c, p);
   for (const p of players) if (p.status === "BODY") p.status = "GHOST";
+  // The meeting closes every station screen.
+  for (const p of players) delete p.openedStation;
   s.killCooldownEndsAt = undefined;
   s.killReadyNotified = false;
   if (s.sabotage) c.log("Sabotage annulé par la réunion");

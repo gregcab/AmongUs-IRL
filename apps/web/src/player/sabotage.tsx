@@ -6,6 +6,7 @@ const SABOTAGE_HINT: Record<SabotageKind, (seconds: number) => string> = {
   reactor: (s) => `Critique : ${s} s pour poser un doigt sur les deux stations Réacteur`,
   oxygen: (s) => `Critique : ${s} s pour taper les deux codes O2`,
   lights: () => "Bloque les signalements de corps jusqu'à la réparation",
+  comms: () => "Bloque les tâches et cache la barre jusqu'à la réparation",
 };
 
 /** Slide target inside the impostor's role card: releasing the finger on it opens the menu. */

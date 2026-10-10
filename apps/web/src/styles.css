@@ -1190,6 +1190,13 @@ a {
   animation: none;
 }
 
+.sabotage-info.sabotage-comms {
+  border-color: rgba(59, 157, 255, 0.6);
+  background: linear-gradient(180deg, rgba(10, 30, 60, 0.92), rgba(4, 10, 24, 0.92));
+  box-shadow: 0 0 20px rgba(59, 157, 255, 0.2);
+  animation: none;
+}
+
 @keyframes sabotage-glow {
   50% {
     box-shadow: 0 0 36px rgba(255, 40, 50, 0.6);
@@ -1337,6 +1344,17 @@ a {
   animation: blackout-flicker 1.6s linear infinite;
 }
 
+.sabotage-alert-comms {
+  background: radial-gradient(circle at 50% 45%, #10304f, #03070f 70%);
+  animation: comms-static 0.25s steps(2) infinite;
+}
+
+@keyframes comms-static {
+  50% {
+    filter: brightness(1.25) contrast(1.2);
+  }
+}
+
 @keyframes sabotage-flash {
   50% {
     filter: brightness(0.7);
@@ -1364,7 +1382,7 @@ a {
 }
 
 .sabotage-alert-title {
-  font-size: 2.6rem;
+  font-size: clamp(1.8rem, 9vw, 2.6rem);
   font-weight: 700;
   line-height: 1.05;
   text-transform: uppercase;
@@ -2075,4 +2093,37 @@ a {
   .alarm::after {
     display: none;
   }
+}
+
+/* Communications sabotage: radio dial, scrambled task bar */
+.radio-wave {
+  width: min(100%, 320px);
+}
+
+.radio-wave polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.radio-wave.tuned polyline {
+  stroke: var(--ok);
+}
+
+.radio-freq {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.taskbar.scrambled .taskbar-track span {
+  width: 100%;
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 12px);
+  box-shadow: none;
+  animation: comms-static 0.4s steps(2) infinite;
+}
+
+.comms-static {
+  color: var(--muted);
 }

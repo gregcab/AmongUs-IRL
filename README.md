@@ -6,7 +6,7 @@ Arbitre numérique pour jouer à Among Us en vrai, dans une maison ou un jardin.
 - **Écran partagé** : `/tv` sur une TV ou un vidéoprojecteur.
 - **Maître du jeu** : `/admin` sur un ordinateur ou une tablette, protégé par un code. Le MJ voit tous les rôles et ne joue pas.
 
-Des **stations** imprimées (QR codes) sont réparties dans la maison : les joueurs y font leurs **tâches** sur le téléphone (mini-jeux) et y réparent les **sabotages** des imposteurs (réacteur, oxygène, lumières).
+Des **stations** imprimées (QR codes) sont réparties dans la maison : les joueurs y font leurs **tâches** sur le téléphone (mini-jeux) et y réparent les **sabotages** des imposteurs (réacteur, oxygène, lumières, communications).
 
 La référence complète des règles et du fonctionnement est dans [SPEC.md](SPEC.md).
 
@@ -118,7 +118,8 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 - **Sabotages** : un imposteur maintient la zone « Maintenir pour voir ton rôle », glisse le doigt sur « saboter » et relâche. Tous les téléphones et la TV donnent l'alerte :
   - **Réacteur** : deux joueurs posent le doigt en même temps sur les deux stations Réacteur ;
   - **Oxygène** : lire les deux codes à la station Admin, puis les taper aux deux stations O2 ;
-  - **Lumières** : remettre les interrupteurs à la station Électricité ; en attendant, impossible de signaler un corps.
+  - **Lumières** : remettre les interrupteurs à la station Électricité ; en attendant, impossible de signaler un corps ;
+  - **Communications** : régler la radio à la station Communications ; en attendant, les vivants ne voient plus leurs tâches ni la barre et ne peuvent pas en faire (une tâche déjà commencée se termine, les fantômes continuent).
 
   Réacteur et oxygène non réparés à temps : victoire des imposteurs. Pendant ces deux sabotages, le bouton d'urgence est bloqué ; toute réunion annule le sabotage.
 - **Fantômes** : ils ne parlent jamais aux vivants.

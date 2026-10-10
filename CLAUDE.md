@@ -63,7 +63,7 @@ Things outside the engine because they need secrets or wall-clock: HMAC tokens (
 
 ### Web client
 
-`lib/socket.ts: useGameConnection` opens one socket per view; rendering depends only on the latest `state:sync`, other events only trigger effects (alarm, vibration, QR, sabotage alert). Deadlines are server timestamps: use `useNow()`/`serverNow()` from `lib/clock.ts` (clock offset synced over `clock:sync`). Mobile constraints (plain HTTP): wake lock via NoSleep.js video fallback, Web Audio synthesized sounds unlocked by a gesture, vibration always doubled by a visual cue, no `crypto.randomUUID` client-side, no camera access (native camera only); after a reload, the next tap re-arms sound and wake lock (`lib/wakeLock.ts`).
+`lib/socket.ts: useGameConnection` opens one socket per view; rendering depends only on the latest `state:sync`, other events only trigger effects (alarm, vibration, QR, sabotage alert). Deadlines are server timestamps: use `useNow()`/`serverNow()` from `lib/clock.ts` (clock offset synced over `clock:sync`). Mobile constraints (plain HTTP): wake lock via NoSleep.js video fallback, Web Audio synthesized sounds unlocked by a gesture, vibration always doubled by a visual cue, no `crypto.randomUUID` client-side, no live camera feed (`getUserMedia` needs HTTPS): the in-game "Scanner" button takes a photo through `<input type="file" capture>` and decodes it in the page (`lib/qrScan.ts`: `BarcodeDetector`, else lazy-loaded `jsqr`); after a reload, the next tap re-arms sound and wake lock (`lib/wakeLock.ts`).
 
 `PlayerApp` takes the `/s/:token` station token, opens it once the session is known (`station:open`) and renders `player/station.tsx` (sabotage repairs) or `player/tasks.tsx` (task stations, cooperative tasks) over the game; mini-games live in `player/minigames.tsx` and only report success (`task:complete`). `HoldPad` sends `station:hold` heartbeats while pressed. An effect must never return a value other than a cleanup function: `window.scrollTo` returns a promise in recent Chrome, which crashed the station screen once.
 
@@ -73,4 +73,4 @@ Things outside the engine because they need secrets or wall-clock: HMAC tokens (
 
 ## Out of scope
 
-Comms sabotage, visual and physical tasks from `docs/propositions-taches.html`, ESP32/MQTT hardware, killer self-ID by victim, game pause, cross-game stats.
+Visual and physical tasks from `docs/propositions-taches.html`, ESP32/MQTT hardware, killer self-ID by victim, game pause, cross-game stats.

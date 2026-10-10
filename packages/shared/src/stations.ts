@@ -4,7 +4,7 @@ import { TASK_DEFS, type TaskType } from "./tasks";
 // A station is a physical spot with a printed QR code (`/s/:token`) where players repair
 // sabotages or do their tasks. Tokens are bound to the game and change with it.
 
-export const SABOTAGE_KINDS = ["reactor", "oxygen", "lights"] as const;
+export const SABOTAGE_KINDS = ["reactor", "oxygen", "lights", "comms"] as const;
 export type SabotageKind = (typeof SABOTAGE_KINDS)[number];
 
 /** Critical sabotages make the impostors win when their countdown runs out. */
@@ -14,6 +14,7 @@ export const SABOTAGE_LABEL: Record<SabotageKind, string> = {
   reactor: "Réacteur",
   oxygen: "Oxygène",
   lights: "Lumières",
+  comms: "Communications",
 };
 
 export interface StationDef {
@@ -35,6 +36,7 @@ export const STATION_DEFS = [
   { id: "o2-b", name: "O2 réserve", purpose: "Oxygène : taper le code lu à la station Admin", sabotage: "oxygen" },
   { id: "admin", name: "Admin", purpose: "Oxygène : affiche les deux codes des stations O2", sabotage: "oxygen" },
   { id: "electrical", name: "Électricité", purpose: "Lumières : remettre tous les interrupteurs", sabotage: "lights" },
+  { id: "comms", name: "Communications", purpose: "Communications : régler la radio sur la bonne fréquence", sabotage: "comms" },
   { id: "card", name: "Lecteur de carte", purpose: "Tâche commune : glisser la carte d'accès", task: "card" },
   { id: "data-download", name: "Données (téléchargement)", purpose: "Tâche longue, étape 1 : télécharger (20 s)", task: "data" },
   { id: "data-upload", name: "Données (envoi)", purpose: "Tâche longue, étape 2 : envoyer (20 s) ; loin de l'étape 1", task: "data" },
@@ -69,6 +71,7 @@ export const SABOTAGE_STATIONS: Record<SabotageKind, readonly StationId[]> = {
   reactor: ["reactor-a", "reactor-b"],
   oxygen: ["o2-a", "o2-b", "admin"],
   lights: ["electrical"],
+  comms: ["comms"],
 };
 
 /** The two O2 stations where a code must be typed (codes are read at `admin`). */
@@ -76,6 +79,11 @@ export const OXYGEN_CODE_STATIONS: readonly StationId[] = ["o2-a", "o2-b"];
 
 /** Number of switches of the lights mini-game. */
 export const LIGHT_SWITCHES = 5;
+
+/** Communications: the radio dial goes from 0 to `COMMS_DIAL_MAX`; the target is drawn away from both ends. */
+export const COMMS_DIAL_MAX = 100;
+/** Communications: a dial this close to the target (either way) counts as tuned. */
+export const COMMS_TOLERANCE = 3;
 
 /** Game-master labels for a station; empty fields fall back to the defaults. */
 export interface StationSetup {

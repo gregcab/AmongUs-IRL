@@ -5,7 +5,7 @@
  *   pnpm simulate --players 4 --passive       bots join, get ready, arrive and vote "skip" on their own;
  *                                             the game is driven from /admin (useful with a real phone)
  *
- * In both modes, living bots repair every sabotage (reactor, oxygen, lights) at the stations,
+ * In both modes, living bots repair every sabotage (reactor, oxygen, lights, comms) at the stations,
  * and bots (ghosts included) do one task step every --task-every seconds (default 20; 0 = never).
  * Options: --url http://localhost:8080  --pin 1234  --seed 42  --task-every 20
  */
@@ -133,6 +133,8 @@ function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>
         await sleep(800);
         await reader.c.send("station:code", { at: at(id), code: read.sabotage!.codes![id] });
       }
+    } else if (sabotage.kind === "comms") {
+      await pick(alive).c.send("station:tune", { at: at("comms"), frequency: sabotage.frequency! });
     } else {
       const fixer = pick(alive);
       const switches = pv(fixer).sabotage?.switches ?? [];

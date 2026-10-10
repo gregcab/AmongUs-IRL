@@ -315,7 +315,7 @@ describe("server integration", () => {
     for (const c of clients.splice(0)) c.close();
     await app.close();
     await boot();
-    expect(app.runtime.state.params.enabledSabotages).toEqual(["reactor", "oxygen", "lights"]);
+    expect(app.runtime.state.params.enabledSabotages).toEqual(["reactor", "oxygen", "lights", "comms"]);
     expect(app.runtime.state.params.sabotageCooldownSeconds).toBe(90);
     const tv = await client({ tv: true });
     expect((await tv.until((v) => v.kind === "tv")).stations).toHaveLength(STATION_IDS.length);

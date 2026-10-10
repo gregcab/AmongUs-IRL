@@ -72,6 +72,8 @@ export interface ClientToServerPayloads {
   "station:code": { at: StationAccess; code: string };
   /** Lights switch flipped at the electrical station. */
   "station:switch": { at: StationAccess; index: number };
+  /** Radio dial held on the right frequency at the communications station. */
+  "station:tune": { at: StationAccess; frequency: number };
   /** Current step of a task done at this station (mini-game won on the phone). */
   "task:complete": { at: StationAccess; taskId: string };
   /** Double key turned at a key station. */

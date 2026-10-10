@@ -26,6 +26,7 @@ export const SABOTAGE_TITLE: Record<PublicSabotage["kind"], string> = {
   reactor: "Réacteur en fusion",
   oxygen: "Oxygène épuisé",
   lights: "Panne de courant",
+  comms: "Communications coupées",
 };
 
 /** What to do about the current sabotage, with the live repair status. Shared by phones and the TV. */
@@ -66,6 +67,11 @@ export function SabotageInfo({ sabotage, stations, large }: { sabotage: PublicSa
             ))}
           </ul>
         </>
+      )}
+      {sabotage.kind === "comms" && (
+        <p className="sabotage-text">
+          Réglez la radio à <StationName station={st("comms")} />. Tâches impossibles en attendant (sauf pour les fantômes).
+        </p>
       )}
       {sabotage.kind === "lights" && (
         <>

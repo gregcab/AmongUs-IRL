@@ -28,11 +28,10 @@ Le maître du jeu (MJ) **ne joue pas** : il voit tous les rôles et arbitre.
 - Console MJ et écran partagé.
 - Persistance et reprise après redémarrage du serveur.
 - Entraînement au scan dans le lobby (§7.1).
-- Stations imprimées (§17), sabotages réacteur, oxygène et lumières (§18), tâches sur téléphone (§19).
+- Stations imprimées (§17), sabotages réacteur, oxygène, lumières et communications (§18), tâches sur téléphone (§19).
 
 ### Hors périmètre
 
-- Sabotage « Comms » (reporté).
 - Tâches visuelles et tâches physiques (QR « de fin ») du catalogue `docs/propositions-taches.html`.
 - Matériel ESP32 / MQTT.
 - Désignation du tueur par la victime.
@@ -339,6 +338,7 @@ station:open        { at }                    ack { stationId } ; at = { token }
 station:hold        { at, holding }           doigt posé (répété toutes les 1,5 s) ou levé
 station:code        { at, code }              code O2
 station:switch      { at, index }             interrupteur de la station électrique
+station:tune        { at, frequency }         fréquence radio tenue 1 s à la station Communications
 task:complete       { at, taskId }            étape de tâche réussie sur le téléphone (§19)
 task:keyTurn        { at }                    double clé
 
@@ -525,7 +525,6 @@ Tests unitaires Vitest sur le moteur pur, au minimum :
 
 ## 15. Évolutions possibles
 
-- Sabotage « Comms » : masquer la liste des tâches jusqu'à la réparation.
 - Tâches visuelles (prouvent l'innocence) et tâches physiques avec un QR « de fin » caché.
 - Stations dupliquées (même tâche, deux QR) pour les grandes parties.
 
@@ -547,7 +546,7 @@ Après chaque étape : lancer les tests et vérifier le build Docker.
 ## 17. Stations
 
 - Une station est un lieu physique avec un QR code imprimé `PUBLIC_URL/s/<token>`, jeton `S|gameId|stationId` signé HMAC : il change à chaque nouvelle partie (réimprimer après « Rejouer »). Sous chaque QR est imprimé un **code à 4 chiffres** (dérivé de la partie, distinct pour chaque station), à taper dans le jeu (« Code d'une station ») quand l'appareil photo ouvre un autre navigateur.
-- Catalogue fixe (`packages/shared/src/stations.ts`) : 6 stations de sabotage (Réacteur gauche et droit, O2 filtre et réserve, Admin, Électricité) et 13 stations de tâches (§19). Une station n'est « utilisée » que si son sabotage ou sa tâche est activé ; seules les stations utilisées sont affichées et imprimées.
+- Catalogue fixe (`packages/shared/src/stations.ts`) : 7 stations de sabotage (Réacteur gauche et droit, O2 filtre et réserve, Admin, Électricité, Communications) et 13 stations de tâches (§19). Une station n'est « utilisée » que si son sabotage ou sa tâche est activé ; seules les stations utilisées sont affichées et imprimées.
 - Le MJ donne à chaque station un nom et un lieu (conservés d'une partie à l'autre) ; `GET /api/print/stations` imprime toutes les stations utilisées (QR, nom, lieu, code, rôle de la station).
 - Scanner une station ouvre l'application joueur sur l'écran de la station (le jeton accompagne chaque commande de station ; le transport le vérifie). Sans session sur ce navigateur : même message que `/r/:token`, avec le conseil de taper le code. Une station ne sert que pendant `PLAYING` (et en réunion pour les tâches si `freezeTasksDuringMeeting = false`) ; une réunion referme l'écran de station.
 
@@ -559,6 +558,7 @@ Après chaque étape : lancer les tests et vérifier le build Docker.
 - **Réacteur** (critique) : réparé dès que deux joueurs maintiennent le doigt en même temps sur les stations Réacteur gauche et droit. Un doigt posé est confirmé toutes les 1,5 s par le téléphone et expire après 4 s sans confirmation (minuteur dérivé de l'état) ; un joueur ne tient qu'une station à la fois.
 - **Oxygène** (critique) : deux codes à 4 chiffres tirés au sort, lisibles à la station Admin (le code n'apparaît que dans la vue des joueurs qui l'ont ouverte), à taper chacun à sa station O2 ; réparé quand les deux sont validés.
 - **Lumières** (non critique) : signalements de corps (scan et code) refusés jusqu'à la réparation ; 5 interrupteurs aléatoires (au moins 2 éteints) à remettre sur ON à la station Électricité. Le bouton d'urgence reste utilisable.
+- **Communications** (non critique) : les vivants ne voient plus leur liste de tâches et ne peuvent plus en faire (équipiers et imposteurs, refus `SABOTAGED`) ; la barre de progression est retirée des vues joueurs et TV (affichée brouillée, « ??? % ») ; le MJ voit toujours la valeur réelle. Les **fantômes** continuent leurs tâches. Une tâche **déjà commencée** se termine : mini-jeu dont la station a été ouverte avant le sabotage (`openedStation` du joueur, effacé à chaque réunion), clé qui répond à un tour déjà donné à l'autre clé, doigt déjà posé sur les Boucliers (les nouveaux doigts sont refusés). Réparation à la station Communications : tourner le bouton de la radio (0 à 100, fréquence tirée entre 15 et 85, envoyée à tous) jusqu'à ce que le grésillement disparaisse, tenir 1 s ; le serveur accepte à ±3.
 - **Échec** : à la fin du compte à rebours d'un sabotage critique (`sabotageCriticalSeconds`), victoire des imposteurs (`reactor` ou `oxygen`).
 - Le MJ voit l'auteur et les codes, et peut réparer le sabotage en cours.
 
