@@ -1,4 +1,4 @@
-import { stationDef, type AnonymousView, type PlayerView, type PublicMeeting, type SabotageKind, type ServerToClientPayloads, type StationAccess, type StationId } from "@among-us/shared";
+import { SABOTAGE_LABEL, stationDef, type AnonymousView, type PlayerView, type PublicMeeting, type SabotageKind, type ServerToClientPayloads, type StationAccess, type StationId } from "@among-us/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playAlarm, playPowerDown, playRepaired, playSabotageAlarm, playVictory } from "../lib/audio";
 import { AlarmOverlay, ResultBlock, type AlarmInfo } from "../lib/game";
@@ -22,6 +22,9 @@ export type Send = <T = unknown>(name: string, payload?: unknown) => Promise<boo
  * The player's phone. `stationToken` is set when the page was opened by scanning a station's
  * QR code (`/s/:token`): the station screen then opens over the game.
  */
+/** Seconds before the end of a critical sabotage when the phones sound again. */
+const CRITICAL_WARNINGS_S = [30, 10];
+
 export function PlayerApp({ stationToken }: { stationToken?: string }) {
   const [toast, showToast] = useToast();
   const [bodyQr, setBodyQr] = useState<ServerToClientPayloads["body:qr"] | null>(null);
@@ -110,6 +113,25 @@ export function PlayerApp({ stationToken }: { stationToken?: string }) {
     const t = setTimeout(() => setSabotageAlert(null), 3500);
     return () => clearTimeout(t);
   }, [sabotageAlert]);
+
+  // A critical sabotage sounds again on the phones as its end gets close (the TV repeats it).
+  const critical = view?.kind === "player" && view.phase === "PLAYING" ? view.sabotage : undefined;
+  const criticalKind = critical?.endsAt !== undefined ? critical.kind : undefined;
+  const criticalEnd = critical?.endsAt;
+  useEffect(() => {
+    if (criticalKind === undefined || criticalEnd === undefined) return;
+    const timers = CRITICAL_WARNINGS_S.map((seconds) => {
+      const delay = criticalEnd - seconds * 1000 - serverNow();
+      // Marks already passed (short countdowns, reconnections) stay silent.
+      if (delay < 1000) return undefined;
+      return setTimeout(() => {
+        playSabotageAlarm();
+        vibrate(VIBRATION.sabotage);
+        showToast(`${SABOTAGE_LABEL[criticalKind]} : plus que ${seconds} s !`);
+      }, delay);
+    });
+    return () => timers.forEach((t) => t !== undefined && clearTimeout(t));
+  }, [criticalKind, criticalEnd, showToast]);
 
   const send = useCallback(
     async <T,>(name: string, payload?: unknown): Promise<boolean | T> => {

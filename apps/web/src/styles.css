@@ -2127,3 +2127,53 @@ a {
 .comms-static {
   color: var(--muted);
 }
+
+/* Critical sabotages: oxygen level draining, reactor temperature rising */
+.critical-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.critical-gauge-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.critical-gauge-label strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.critical-gauge-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.critical-gauge-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s linear;
+}
+
+.critical-oxygen .critical-gauge-track span {
+  background: linear-gradient(90deg, #ff3b47, #3bd1ff);
+}
+
+.critical-reactor .critical-gauge-track span {
+  background: linear-gradient(90deg, #ffb020, #ff3b47);
+}
+
+.sabotage-info.large .critical-gauge-label {
+  font-size: 2rem;
+}
+
+.sabotage-info.large .critical-gauge-track {
+  height: 34px;
+  border-width: 2px;
+}

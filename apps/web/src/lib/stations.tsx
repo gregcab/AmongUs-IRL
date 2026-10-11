@@ -34,12 +34,18 @@ export function SabotageInfo({ sabotage, stations, large }: { sabotage: PublicSa
   const now = useNow(250);
   const st = (id: StationId) => stationById(stations, id);
   const left = sabotage.endsAt !== undefined ? secondsLeft(sabotage.endsAt, now) : undefined;
+  // Critical sabotages: the oxygen level drains, the reactor heats up, over the countdown.
+  const remaining =
+    sabotage.endsAt !== undefined && sabotage.endsAt > sabotage.startedAt
+      ? Math.min(1, Math.max(0, (sabotage.endsAt - now) / (sabotage.endsAt - sabotage.startedAt)))
+      : undefined;
   return (
     <div className={`sabotage-info sabotage-${sabotage.kind}${large ? " large" : ""}`}>
       <div className="sabotage-head">
         <span className="sabotage-title">{SABOTAGE_TITLE[sabotage.kind]}</span>
         {left !== undefined && <span className="sabotage-timer">{formatSeconds(left)}</span>}
       </div>
+      {remaining !== undefined && <CriticalGauge kind={sabotage.kind} remaining={remaining} />}
       {sabotage.kind === "reactor" && (
         <>
           <p className="sabotage-text">Deux joueurs : un doigt en même temps sur chaque station Réacteur.</p>
@@ -88,6 +94,23 @@ export function SabotageInfo({ sabotage, stations, large }: { sabotage: PublicSa
           </ul>
         </>
       )}
+    </div>
+  );
+}
+
+/** Oxygen level (drains to 0 %) or reactor temperature (rises to 100 %) of a critical sabotage. */
+function CriticalGauge({ kind, remaining }: { kind: SabotageKind; remaining: number }) {
+  const level = kind === "oxygen" ? remaining : 1 - remaining;
+  const percent = Math.round(level * 100);
+  return (
+    <div className={`critical-gauge critical-${kind}`}>
+      <div className="critical-gauge-label">
+        <span>{kind === "oxygen" ? "Oxygène" : "Température du réacteur"}</span>
+        <strong>{percent} %</strong>
+      </div>
+      <div className="critical-gauge-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <span style={{ width: `${level * 100}%` }} />
+      </div>
     </div>
   );
 }

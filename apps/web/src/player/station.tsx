@@ -37,13 +37,12 @@ export function StationScreen({ view, station, send, onClose }: { view: PlayerVi
         <div className="title">{info.name}</div>
         {info.location && <div className="muted">{info.location}</div>}
       </div>
+      {/* Wherever the player stands, the running sabotage stays in sight. */}
+      {view.sabotage && <SabotageInfo sabotage={view.sabotage} stations={view.stations} />}
       {!enabled ? (
         <div className="panel center big">Station inactive pour cette partie.</div>
       ) : stationDef(station.id).task ? (
-        <>
-          {view.sabotage && <SabotageInfo sabotage={view.sabotage} stations={view.stations} />}
-          <TaskStation view={view} station={station} send={send} />
-        </>
+        <TaskStation view={view} station={station} send={send} />
       ) : (
         <StationContent view={view} station={station} send={send} />
       )}
@@ -79,12 +78,11 @@ function StationContent({ view, station, send }: { view: PlayerView; station: Op
       <div className="panel stack center station-idle">
         <div className="big">Rien à réparer ici pour l'instant.</div>
         <p className="muted" style={{ margin: 0 }}>
-          En cas de sabotage, revenez scanner cette station.
+          {sabotage ? "Le sabotage en cours se répare ailleurs : voir ci-dessus." : "En cas de sabotage, revenez scanner cette station."}
         </p>
       </div>
     );
   }
-  if (!sabotage) return null;
   const ghost = view.me.status === "GHOST";
   const repairUi =
     station.id === "admin" ? (
@@ -100,12 +98,7 @@ function StationContent({ view, station, send }: { view: PlayerView; station: Op
     ) : (
       <LightSwitches view={view} station={station} send={send} />
     );
-  return (
-    <>
-      <SabotageInfo sabotage={sabotage} stations={view.stations} />
-      {repairUi}
-    </>
-  );
+  return repairUi;
 }
 
 function ReactorPad({ view, station, send }: { view: PlayerView; station: OpenStation; send: Send }) {
