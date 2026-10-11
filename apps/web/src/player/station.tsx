@@ -57,6 +57,13 @@ function StationContent({ view, station, send }: { view: PlayerView; station: Op
   const kind = stationDef(station.id).sabotage;
   const sabotage = view.sabotage;
   const active = kind !== undefined && sabotage?.kind === kind;
+  // Oxygen codes reach a player once they open an O2 or admin station: a screen opened before
+  // the sabotage started opens the station again to get them.
+  const needsCodes = active && kind === "oxygen" && !sabotage?.codes;
+  const sabotageId = sabotage?.id;
+  useEffect(() => {
+    if (needsCodes) void send("station:open", { at: station.at });
+  }, [needsCodes, sabotageId, send, station.at]);
   // A sabotage that ends while the player stands here was just repaired.
   const [repaired, setRepaired] = useState(false);
   const wasActive = useRef(active);
@@ -130,9 +137,10 @@ function ReactorPad({ view, station, send }: { view: PlayerView; station: OpenSt
 }
 
 function OxygenCode({ view, station, send }: { view: PlayerView; station: OpenStation; send: Send }) {
-  const [code, setCode] = useState("");
+  const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
-  const digits = code.replace(/\D/g, "").slice(0, 4);
+  const code = view.sabotage?.codes?.[station.id];
+  const digits = typed.replace(/\D/g, "").slice(0, 4);
   const done = view.sabotage?.entered?.includes(station.id) ?? false;
   if (done) return <div className="panel center big check">Code validé ✓</div>;
   return (
@@ -144,20 +152,21 @@ function OxygenCode({ view, station, send }: { view: PlayerView; station: OpenSt
         setBusy(true);
         const ok = await send("station:code", { at: station.at, code: digits });
         setBusy(false);
-        if (!ok) setCode("");
+        if (!ok) setTyped("");
       }}
     >
       <div className="big">Code de cette station</div>
-      <p className="muted" style={{ margin: 0 }}>
-        Lu à la station <StationName station={stationById(view.stations, "admin")} />.
-      </p>
+      <div className="o2-code">
+        <span className="muted">Code à taper</span>
+        <b>{code ?? "····"}</b>
+      </div>
       <input
         className="input code-input"
         inputMode="numeric"
         autoComplete="off"
         placeholder="0000"
         value={digits}
-        onChange={(e) => setCode(e.target.value)}
+        onChange={(e) => setTyped(e.target.value)}
       />
       <button className="btn ok" disabled={busy || digits.length !== 4}>
         Valider le code

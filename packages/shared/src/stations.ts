@@ -33,9 +33,9 @@ export interface StationDef {
 export const STATION_DEFS = [
   { id: "reactor-a", name: "Réacteur gauche", purpose: "Réacteur : maintenir le doigt en même temps que la station Réacteur droit", sabotage: "reactor" },
   { id: "reactor-b", name: "Réacteur droit", purpose: "Réacteur : maintenir le doigt en même temps que la station Réacteur gauche", sabotage: "reactor" },
-  { id: "o2-a", name: "O2 filtre", purpose: "Oxygène : taper le code lu à la station Admin", sabotage: "oxygen" },
-  { id: "o2-b", name: "O2 réserve", purpose: "Oxygène : taper le code lu à la station Admin", sabotage: "oxygen" },
-  { id: "admin", name: "Admin", purpose: "Oxygène : affiche les deux codes des stations O2", sabotage: "oxygen" },
+  { id: "o2-a", name: "O2 filtre", purpose: "Oxygène : taper le code affiché à la station", sabotage: "oxygen" },
+  { id: "o2-b", name: "O2 réserve", purpose: "Oxygène : taper le code affiché à la station", sabotage: "oxygen" },
+  { id: "admin", name: "Admin", purpose: "Oxygène (facultatif) : affiche les deux codes des stations O2", sabotage: "oxygen" },
   { id: "electrical", name: "Électricité", purpose: "Lumières : remettre tous les interrupteurs", sabotage: "lights" },
   { id: "comms", name: "Communications", purpose: "Communications : régler la radio sur la bonne fréquence", sabotage: "comms" },
   { id: "card", name: "Lecteur de carte", purpose: "Tâche commune : glisser la carte d'accès", task: "card" },
@@ -75,7 +75,7 @@ export const SABOTAGE_STATIONS: Record<SabotageKind, readonly StationId[]> = {
   comms: ["comms"],
 };
 
-/** The two O2 stations where a code must be typed (codes are read at `admin`). */
+/** The two O2 stations where a code must be typed (each shows its own code; `admin` shows both). */
 export const OXYGEN_CODE_STATIONS: readonly StationId[] = ["o2-a", "o2-b"];
 
 /** Number of switches of the lights mini-game. */

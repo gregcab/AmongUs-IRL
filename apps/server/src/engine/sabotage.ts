@@ -126,7 +126,7 @@ export function holdExpired(c: Ctx, stationId: StationId, playerId: string, unti
   delete holders[playerId];
 }
 
-/** Oxygen: the code read at the admin station, typed at each O2 station. */
+/** Oxygen: the code shown at each O2 station (and at the admin station), typed there. */
 export function stationCode(c: Ctx, playerId: string, stationId: StationId, typed: string): Outcome {
   const denied = repairer(c, playerId, stationId, "oxygen");
   if (denied) return denied;
@@ -161,7 +161,8 @@ export function stationTune(c: Ctx, playerId: string, stationId: StationId, freq
 
 /**
  * Opening a task station is remembered (a task begun before a communications sabotage may
- * finish); opening the admin station during an oxygen sabotage reveals the codes to that player.
+ * finish); opening an O2 station (or the admin station) during an oxygen sabotage reveals the
+ * codes to that player, so oxygen is repaired at the O2 stations alone.
  */
 export function openStation(c: Ctx, playerId: string, stationId: StationId): Outcome {
   const p = c.player(playerId);
@@ -171,7 +172,7 @@ export function openStation(c: Ctx, playerId: string, stationId: StationId): Out
     return;
   }
   const active = c.s.sabotage;
-  if (c.s.phase !== "PLAYING" || stationId !== "admin" || active?.kind !== "oxygen") return "noop";
+  if (c.s.phase !== "PLAYING" || active?.kind !== "oxygen" || !SABOTAGE_STATIONS.oxygen.includes(stationId)) return "noop";
   if (active.codeReaders?.includes(p.id)) return "noop";
   active.codeReaders = [...(active.codeReaders ?? []), p.id];
 }

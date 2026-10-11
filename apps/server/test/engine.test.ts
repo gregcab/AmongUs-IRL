@@ -635,6 +635,21 @@ describe("sabotage", () => {
     expect(h.state.sabotage).toBeUndefined();
   });
 
+  it("repairs oxygen with the code shown at each O2 station", () => {
+    const { h, impostors, crew } = playing();
+    h.seconds(20);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "oxygen" });
+    const codes = h.state.sabotage!.codes!;
+    h.do({ type: "station:open", playerId: crew[0]!, stationId: "o2-a" });
+    expect(playerView(h.state, crew[0]!).sabotage?.codes?.["o2-a"]).toBe(codes["o2-a"]);
+    expect(playerView(h.state, crew[1]!).sabotage?.codes).toBeUndefined();
+    expect(JSON.stringify(tvView(h.state, "http://x"))).not.toContain(codes["o2-a"]!);
+    h.do({ type: "station:code", playerId: crew[0]!, stationId: "o2-a", code: codes["o2-a"]! });
+    h.do({ type: "station:open", playerId: crew[1]!, stationId: "o2-b" });
+    h.do({ type: "station:code", playerId: crew[1]!, stationId: "o2-b", code: playerView(h.state, crew[1]!).sabotage!.codes!["o2-b"]! });
+    expect(h.state.sabotage).toBeUndefined();
+  });
+
   it("repairs oxygen with the two codes read at the admin station", () => {
     const { h, impostors, crew } = playing();
     h.seconds(20);
@@ -642,7 +657,7 @@ describe("sabotage", () => {
     const codes = h.state.sabotage!.codes!;
     expect(codes["o2-a"]).toMatch(/^\d{4}$/);
     expect(codes["o2-b"]).not.toBe(codes["o2-a"]);
-    // Codes are only shown to players who opened the admin station.
+    // Codes are only shown to players who opened the admin station or an O2 station.
     expect(JSON.stringify(playerView(h.state, crew[0]!))).not.toContain(codes["o2-a"]!);
     expect(JSON.stringify(tvView(h.state, "http://x"))).not.toContain(codes["o2-a"]!);
     h.do({ type: "station:open", playerId: crew[0]!, stationId: "admin" });

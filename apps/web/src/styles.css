@@ -1437,6 +1437,14 @@ a {
   font-size: 3.2rem;
 }
 
+.o2-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.o2-code b,
 .o2-codes b {
   font-size: 2rem;
   letter-spacing: 0.2em;

@@ -62,7 +62,7 @@ export function SabotageInfo({ sabotage, stations, large }: { sabotage: PublicSa
       {sabotage.kind === "oxygen" && (
         <>
           <p className="sabotage-text">
-            Lisez les codes à <StationName station={st("admin")} />, puis tapez-les aux deux stations O2.
+            Allez aux deux stations O2 et tapez le code affiché.
           </p>
           <ul className="sabotage-status">
             {OXYGEN_CODE_STATIONS.map((id) => (

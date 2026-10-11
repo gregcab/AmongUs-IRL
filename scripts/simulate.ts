@@ -97,7 +97,7 @@ async function stationCodes(admin: TestClient): Promise<Map<StationId, string>> 
 
 /**
  * Living bots repair each new sabotage after a short delay, like players running to the
- * stations: two fingers on the reactor, the O2 codes read at the admin station, the switches.
+ * stations: two fingers on the reactor, the code shown at each O2 station, the switches.
  */
 function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>): void {
   let handled = "";
@@ -126,12 +126,12 @@ function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>
       clearInterval(beat);
       for (const [i, h] of holders.entries()) await h.c.send("station:hold", { at: at(SABOTAGE_STATIONS.reactor[i]!), holding: false });
     } else if (sabotage.kind === "oxygen") {
-      const reader = pick(alive);
-      await reader.c.ok("station:open", { at: at("admin") });
-      const read = (await reader.c.until((view) => view.kind === "player" && view.sabotage?.codes !== undefined, 5000)) as PlayerView;
+      const fixer = pick(alive);
       for (const id of OXYGEN_CODE_STATIONS) {
         await sleep(800);
-        await reader.c.send("station:code", { at: at(id), code: read.sabotage!.codes![id] });
+        await fixer.c.ok("station:open", { at: at(id) });
+        const read = (await fixer.c.until((view) => view.kind === "player" && view.sabotage?.codes?.[id] !== undefined, 5000)) as PlayerView;
+        await fixer.c.send("station:code", { at: at(id), code: read.sabotage!.codes![id] });
       }
     } else if (sabotage.kind === "comms") {
       await pick(alive).c.send("station:tune", { at: at("comms"), frequency: sabotage.frequency! });
