@@ -29,8 +29,9 @@ export class Ctx {
     return durationMs(this.s, seconds);
   }
 
+  /** Own keys only: `players["__proto__"]` would be `Object.prototype`. */
   player(id: string): Player | undefined {
-    return this.s.players[id];
+    return Object.hasOwn(this.s.players, id) ? this.s.players[id] : undefined;
   }
 }
 

@@ -25,6 +25,9 @@ describe("params", () => {
   it("validates bounds and types", () => {
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 60 }).ok).toBe(true);
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 1 }).ok).toBe(false);
+    // Keys inherited from Object.prototype are unknown parameters, not a crash.
+    expect(validateParams(DEFAULT_PARAMS, JSON.parse('{"__proto__": 3}')).ok).toBe(false);
+    expect(validateParams(DEFAULT_PARAMS, { toString: 3, constructor: 1 }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 12.5 }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { ghostMeetingMode: "nope" }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { unknown: 1 }).ok).toBe(false);
@@ -558,6 +561,33 @@ describe("admin", () => {
     expect(h.state.meeting?.subPhase).toBe("VOTING");
     h.do({ type: "admin:declareDeath", playerId: crew[0]! });
     expect(h.state.meeting?.subPhase).toBe("RESULT");
+  });
+
+  it("withdraws the votes against a player killed by the admin during the vote", () => {
+    const h = new Harness(FAST);
+    const { crew } = h.startGame(6);
+    h.do({ type: "admin:callMeeting" });
+    h.do({ type: "admin:advancePhase" });
+    h.do({ type: "admin:advancePhase" });
+    h.do({ type: "player:vote", playerId: crew[1]!, targetId: crew[0]! });
+    h.do({ type: "player:vote", playerId: crew[2]!, targetId: crew[0]! });
+    h.do({ type: "player:vote", playerId: crew[3]!, targetId: SKIP_VOTE });
+    h.do({ type: "admin:declareDeath", playerId: crew[0]! });
+    expect(h.state.meeting?.votes).toEqual({ [crew[3]!]: SKIP_VOTE });
+    // Those voters vote again; a ghost is never ejected.
+    h.do({ type: "player:vote", playerId: crew[1]!, targetId: SKIP_VOTE });
+    h.do({ type: "admin:advancePhase" });
+    expect(h.state.meeting?.result?.ejectedId).toBeNull();
+    expect(h.state.players[crew[0]!]!.ejected).toBe(false);
+  });
+
+  it("ignores player ids inherited from Object.prototype", () => {
+    const h = new Harness();
+    h.join(4);
+    expect(h.try({ type: "admin:rename", playerId: "__proto__", name: "Pirate" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(h.try({ type: "admin:kick", playerId: "__proto__" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(h.try({ type: "admin:kick", playerId: "toString" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(({} as Record<string, unknown>).name).toBeUndefined();
   });
 
   it("is pure: reduce never mutates its input", () => {

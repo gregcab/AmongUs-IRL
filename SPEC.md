@@ -158,7 +158,7 @@ reduce(state: GameState, command: Command, now: number, rng: Rng)
 - `timers` demande au scheduler de rappeler le moteur à une échéance donnée (`tick:deathEffective`, `tick:phaseEnd`, `tick:killReady`…). Chaque timer porte un identifiant pour pouvoir être annulé ou ignoré s'il est devenu obsolète.
 - `rng` est injecté pour rendre le tirage des rôles reproductible en test ; en production, générateur cryptographique (`crypto.randomInt`).
 
-Chaque commande acceptée est ajoutée au journal SQLite, et l'état complet est sauvegardé en instantané JSON. Au redémarrage, le serveur recharge le dernier instantané et replanifie les timers à partir des échéances stockées dans l'état.
+Chaque commande acceptée est ajoutée au journal SQLite, et l'état complet est sauvegardé en instantané JSON. Exceptions : les battements de doigt sur une station (`station:hold`, expiration des appuis) et les connexions/déconnexions ne sont pas journalisés, et leur instantané est différé de 5 s au plus (sauf s'ils réparent un sabotage), pour ménager la carte SD. Le journal ne garde que la partie en cours et la précédente. Au redémarrage, le serveur recharge le dernier instantané et replanifie les timers à partir des échéances stockées dans l'état.
 
 ## 7. Fonctionnalités
 
