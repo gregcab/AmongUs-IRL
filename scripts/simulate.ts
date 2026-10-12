@@ -12,6 +12,8 @@
 import type { ClientView, PlayerView, SabotageKind, StationId } from "../packages/shared/src/index";
 import {
   ADMIN_COOKIE,
+  COMMS_DIAL_MAX,
+  COMMS_HOLD_MS,
   OXYGEN_CODE_STATIONS,
   PLAYER_COLORS,
   SABOTAGE_LABEL,
@@ -134,7 +136,13 @@ function autoRepair(bots: Bot[], getCodes: () => Promise<Map<StationId, string>>
         await fixer.c.send("station:code", { at: at(id), code: read.sabotage!.codes![id] });
       }
     } else if (sabotage.kind === "comms") {
-      await pick(alive).c.send("station:tune", { at: at("comms"), frequency: sabotage.frequency! });
+      // The target stays on the server: sweep the dial until the signal is clear, then hold it.
+      const fixer = pick(alive);
+      for (let frequency = 0; frequency <= COMMS_DIAL_MAX; frequency += 5) {
+        await fixer.c.send("station:tune", { at: at("comms"), frequency });
+        if (pv(fixer).sabotage?.signal?.tuned) break;
+      }
+      await sleep(COMMS_HOLD_MS + 300);
     } else {
       const fixer = pick(alive);
       const switches = pv(fixer).sabotage?.switches ?? [];

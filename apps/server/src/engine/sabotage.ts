@@ -1,5 +1,6 @@
 import {
   COMMS_DIAL_MAX,
+  COMMS_HOLD_MS,
   COMMS_TOLERANCE,
   CRITICAL_SABOTAGES,
   LIGHT_SWITCHES,
@@ -70,6 +71,7 @@ export function sabotage(c: Ctx, playerId: string, kind: SabotageKind): Outcome 
     // Away from both ends, so the dial always has to move.
     const margin = Math.round(COMMS_DIAL_MAX * 0.15);
     active.frequency = margin + c.rng.int(COMMS_DIAL_MAX - 2 * margin + 1);
+    active.dials = {};
   }
   s.sabotage = active;
   // The cooldown restarts once the sabotage is over.
@@ -150,12 +152,33 @@ export function stationSwitch(c: Ctx, playerId: string, stationId: StationId, in
   if (switches.every(Boolean)) repair(c, "à l'électricité");
 }
 
-/** Communications: the radio dial held on the drawn frequency (the phone checks the hold). */
+/**
+ * Communications: the phone reports its dial as it turns. The server alone knows the target:
+ * a dial kept within the tolerance for `COMMS_HOLD_MS` repairs the radio (`tick:commsTuned`).
+ */
 export function stationTune(c: Ctx, playerId: string, stationId: StationId, frequency: number): Outcome {
   const denied = repairer(c, playerId, stationId, "comms");
   if (denied) return denied;
   if (!Number.isFinite(frequency)) return fail("BAD_REQUEST", "Fréquence invalide");
-  if (Math.abs(frequency - c.s.sabotage!.frequency!) > COMMS_TOLERANCE) return fail("WRONG_CODE", "Mauvaise fréquence : la radio grésille encore");
+  const active = c.s.sabotage!;
+  const value = Math.min(COMMS_DIAL_MAX, Math.max(0, Math.round(frequency)));
+  const dials = (active.dials ??= {});
+  const before = dials[playerId];
+  const tuned = Math.abs(value - active.frequency!) <= COMMS_TOLERANCE;
+  const tunedAt = tuned ? (before?.tunedAt ?? c.now) : undefined;
+  if (before?.value === value && before.tunedAt === tunedAt) return "noop";
+  dials[playerId] = tunedAt === undefined ? { value } : { value, tunedAt };
+}
+
+export function commsTuned(c: Ctx, playerId: string, at: number): Outcome {
+  const active = c.s.sabotage;
+  const tunedAt = active?.kind === "comms" ? active.dials?.[playerId]?.tunedAt : undefined;
+  if (c.s.phase !== "PLAYING" || tunedAt === undefined || tunedAt + COMMS_HOLD_MS !== at) return "noop";
+  // The player may have died meanwhile: their dial goes (and its timer with it).
+  if (repairer(c, playerId, "comms", "comms")) {
+    delete active!.dials![playerId];
+    return;
+  }
   repair(c, "à la radio");
 }
 

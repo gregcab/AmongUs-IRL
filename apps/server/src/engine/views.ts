@@ -11,7 +11,7 @@ import type {
   PublicSabotage,
   TvView,
 } from "@among-us/shared";
-import { SABOTAGE_STATIONS } from "@among-us/shared";
+import { COMMS_DIAL_MAX, SABOTAGE_STATIONS } from "@among-us/shared";
 import { enabledStations, isAlive, playersInOrder } from "./state";
 import { coopView, crewProgress, visibleTaskBar } from "./tasks";
 
@@ -93,7 +93,13 @@ export function publicSabotage(s: GameState, readerId?: string): PublicSabotage 
     if (readerId && active.codeReaders?.includes(readerId)) view.codes = { ...active.codes };
   }
   if (active.switches) view.switches = [...active.switches];
-  if (active.frequency !== undefined) view.frequency = active.frequency;
+  const dial = readerId ? active.dials?.[readerId] : undefined;
+  if (active.kind === "comms" && dial) {
+    const gap = Math.abs(dial.value - active.frequency!);
+    // Coarse on purpose: enough to hear the static fade, not to read the target off it.
+    const clarity = Math.round(Math.max(0, 1 - gap / (COMMS_DIAL_MAX / 2)) * 20) / 20;
+    view.signal = { value: dial.value, clarity, tuned: dial.tunedAt !== undefined };
+  }
   return view;
 }
 

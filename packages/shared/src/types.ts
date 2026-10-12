@@ -113,8 +113,10 @@ export interface ActiveSabotage {
   codeReaders?: string[];
   /** Lights: switch positions; repaired when they are all on. */
   switches?: boolean[];
-  /** Communications: dial position to tune the radio to. */
+  /** Communications: dial position to tune the radio to (admin only). */
   frequency?: number;
+  /** Communications: each player's dial; `tunedAt` while it stays within the tolerance. */
+  dials?: Record<string, { value: number; tunedAt?: number }>;
 }
 
 export interface GameState {
@@ -199,8 +201,11 @@ export interface PublicSabotage {
   codes?: Partial<Record<StationId, string>>;
   /** Lights: switch positions. */
   switches?: boolean[];
-  /** Communications: dial position to tune the radio to. */
-  frequency?: number;
+  /**
+   * Communications: how clear the radio sounds on the reader's own dial (0 to 1, coarse),
+   * and whether it is tuned. The target frequency never leaves the server.
+   */
+  signal?: { value: number; clarity: number; tuned: boolean };
 }
 
 export interface PublicMeetingResult {
