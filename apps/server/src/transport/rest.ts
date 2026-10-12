@@ -1,12 +1,11 @@
 import { ADMIN_COOKIE, SESSION_COOKIE, SESSION_HEADER, type GameError } from "@among-us/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import QRCode from "qrcode";
 import { parseCookies } from "../auth";
 import type { Command } from "../engine";
 import type { GameRuntime } from "../game";
 import type { Tokens } from "../tokens";
 import type { PrintableStation } from "./socket";
-import { stationsPage } from "./stationsPrint";
+import { emergencyPage, stationsPage } from "./stationsPrint";
 
 export interface RestOptions {
   runtime: GameRuntime;
@@ -96,35 +95,11 @@ export function registerRest(app: FastifyInstance, opts: RestOptions): void {
 
   app.get("/api/print/emergency", async (req, reply) => {
     if (!isAdmin(req)) return denied(reply);
-    const url = opts.emergencyUrl();
-    const svg = await QRCode.toString(url, { type: "svg", errorCorrectionLevel: "M", margin: 2 });
-    return reply.type("text/html").send(printPage(svg));
+    return reply.type("text/html").send(emergencyPage(opts.emergencyUrl()));
   });
 
   app.get("/api/print/stations", async (req, reply) => {
     if (!isAdmin(req)) return denied(reply);
     return reply.type("text/html").send(stationsPage(opts.stations()));
   });
-}
-
-function printPage(svg: string): string {
-  return `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>Station d'urgence</title>
-<style>
-  @page { size: A4; margin: 15mm; }
-  body { font-family: system-ui, sans-serif; text-align: center; color: #000; background: #fff; margin: 0; }
-  h1 { font-size: 34pt; margin: 10mm 0 4mm; letter-spacing: .02em; }
-  p { font-size: 15pt; margin: 2mm 0; }
-  .qr { width: 150mm; height: 150mm; margin: 8mm auto; border: 3mm solid #d71e1e; padding: 4mm; }
-  .qr svg { width: 100%; height: 100%; }
-  button { font-size: 14pt; padding: 3mm 8mm; margin-top: 6mm; }
-  @media print { button { display: none; } }
-</style></head>
-<body>
-  <h1>RÉUNION D'URGENCE</h1>
-  <p>Scannez avec l'appareil photo du téléphone qui vous sert à jouer.</p>
-  <div class="qr">${svg}</div>
-  <p>Valable uniquement pour la partie en cours.</p>
-  <button onclick="window.print()">Imprimer</button>
-</body></html>`;
 }

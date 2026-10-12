@@ -38,6 +38,11 @@ const ICONS: Record<StationId, string> = {
   shield: svg(`<path d="M32 6 10 14v16c0 14 9 24 22 28 13-4 22-14 22-28V14z"/><path d="m22 32 7 7 13-14"/>`),
 };
 
+/** Siren: the emergency meeting button. */
+export function emergencyIcon(): string {
+  return svg(`<path d="M16 54V34a16 16 0 0 1 32 0v20z"/><path d="M10 54h44M32 6v6M12 14l4 4M52 14l-4 4M6 28h6M52 28h6M25 34a7 7 0 0 1 7-7"/>`);
+}
+
 export function stationIcon(id: StationId): string {
   return ICONS[id];
 }

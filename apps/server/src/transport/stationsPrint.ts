@@ -1,11 +1,47 @@
-import { stationDef } from "@among-us/shared";
+import { stationDef, type SabotageKind } from "@among-us/shared";
 import QRCode from "qrcode";
-import { stationIcon } from "./stationIcons";
+import { emergencyIcon, stationIcon } from "./stationIcons";
 import type { PrintableStation } from "./socket";
 
-// Printable stations page: an editor (card template, paper format, station selection) with a
-// WYSIWYG preview of the sheets. Every template is in the same markup and picked with a CSS class,
-// so switching never hits the server.
+// Printable pages (stations, emergency QR): an editor (card template, paper format, selection)
+// with a WYSIWYG preview of the sheets. Every template is in the same markup and picked with a
+// CSS class, so switching never hits the server. Each card has an accent colour (QR modules,
+// picto, border, banner); all colours are dark enough to scan reliably on white paper.
+
+const SABOTAGE_COLOR: Record<SabotageKind, string> = {
+  reactor: "#c2410c",
+  oxygen: "#1d4ed8",
+  lights: "#a16207",
+  comms: "#047857",
+};
+const TASK_COLOR = "#6d28d9";
+export const EMERGENCY_COLOR = "#b91c1c";
+
+export function stationColor(id: PrintableStation["id"]): string {
+  const { sabotage } = stationDef(id);
+  return sabotage ? SABOTAGE_COLOR[sabotage] : TASK_COLOR;
+}
+
+/** One card of a printable page. */
+export interface PrintItem {
+  id: string;
+  name: string;
+  location: string;
+  url: string;
+  /** Code typed in the app when the camera opens another browser; the emergency QR has none. */
+  code?: string;
+  purpose: string;
+  color: string;
+  icon: string;
+}
+
+export interface PrintPageOptions {
+  title: string;
+  intro: string;
+  /** Shown instead of the editor when there is nothing to print. */
+  empty: string;
+  defaults: { format: string; template: string };
+}
 
 /** Share of the QR side covered by the centred badge of the « picto dans le QR » template. */
 export const QR_BADGE_RATIO = 0.22;
@@ -29,7 +65,7 @@ export function badgeBounds(size: number): { from: number; to: number } {
   return { from, to: from + side };
 }
 
-export function qrSvg(url: string, icon: string): string {
+export function qrSvg(url: string, icon: string, color = "#000"): string {
   const m = qrMatrix(url);
   const total = m.size + 2 * QR_MARGIN;
   let path = "";
@@ -42,23 +78,22 @@ export function qrSvg(url: string, icon: string): string {
   const inner = icon.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
   const badge =
     `<g class="badge"><rect x="${x}" y="${x}" width="${side}" height="${side}" fill="#fff"/>` +
-    `<svg x="${x + pad}" y="${x + pad}" width="${side - 2 * pad}" height="${side - 2 * pad}" viewBox="0 0 64 64" fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg></g>`;
-  return `<svg viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><path d="${path}" fill="#000"/>${badge}</svg>`;
+    `<svg x="${x + pad}" y="${x + pad}" width="${side - 2 * pad}" height="${side - 2 * pad}" viewBox="0 0 64 64" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg></g>`;
+  return `<svg viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><path d="${path}" fill="${color}"/>${badge}</svg>`;
 }
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 }
 
-function card(st: PrintableStation): string {
-  const icon = stationIcon(st.id);
-  return `<section class="card" data-station="${st.id}">
+function card(it: PrintItem): string {
+  return `<section class="card" data-station="${it.id}" style="--c:${it.color}">
   <div class="face">
-    <div class="pic">${icon}</div>
-    <div class="titles"><div class="name">${escapeHtml(st.name)}</div>${st.location ? `<div class="loc">${escapeHtml(st.location)}</div>` : ""}</div>
-    <div class="qr">${qrSvg(st.url, icon)}</div>
-    <div class="code">Code <b>${st.code}</b></div>
-    <div class="purpose">${escapeHtml(stationDef(st.id).purpose)}</div>
+    <div class="pic">${it.icon}</div>
+    <div class="titles"><div class="name">${escapeHtml(it.name)}</div>${it.location ? `<div class="loc">${escapeHtml(it.location)}</div>` : ""}</div>
+    <div class="qr">${qrSvg(it.url, it.icon, it.color)}</div>
+    ${it.code ? `<div class="code">Code <b>${it.code}</b></div>` : ""}
+    <div class="purpose">${escapeHtml(it.purpose)}</div>
   </div>
 </section>`;
 }
@@ -80,13 +115,14 @@ const STYLE = `
   #pool { display: none; }
 
   /* The card is the size container: cq units only resolve inside it, hence the inner .face. */
-  .card { container-type: size; border: 1mm solid #000; border-radius: 4mm; background: #fff; overflow: hidden; min-height: 0; }
+  .card { container-type: size; border: 1mm solid var(--c, #000); border-radius: 4mm; background: #fff; overflow: hidden; min-height: 0; }
   .face { width: 100%; height: 100%; text-align: center;
     display: grid; justify-content: center; align-content: center; justify-items: center; align-items: center; padding: calc(3 * var(--u)); row-gap: calc(1.5 * var(--u)); }
   .face > * { min-width: 0; }
   .name { font-size: calc(7.5 * var(--u)); font-weight: 800; line-height: 1.1; }
   .loc { font-size: calc(4.2 * var(--u)); margin-top: calc(.5 * var(--u)); }
   .qr > svg { display: block; width: 100%; height: 100%; }
+  .pic { color: var(--c, #000); }
   .pic .icon { display: block; width: 100%; height: 100%; }
   .code { font-size: calc(4.6 * var(--u)); }
   .code b { font-size: calc(6.4 * var(--u)); letter-spacing: .15em; }
@@ -109,8 +145,8 @@ const STYLE = `
   /* Bandeau */
   .t-banner .face { padding: 0; row-gap: calc(2 * var(--u)); grid-template-columns: calc(24 * var(--u)) 1fr; justify-content: stretch; column-gap: 0; align-content: start;
     grid-template-areas: "pic titles" "qr qr" "code code" "purpose purpose"; }
-  .t-banner .pic { grid-area: pic; background: #000; color: #fff; width: 100%; height: 100%; padding: calc(4 * var(--u)); }
-  .t-banner .titles { grid-area: titles; background: #000; color: #fff; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 calc(3 * var(--u)) 0 0; text-align: left; }
+  .t-banner .pic { grid-area: pic; background: var(--c, #000); color: #fff; width: 100%; height: 100%; padding: calc(4 * var(--u)); }
+  .t-banner .titles { grid-area: titles; background: var(--c, #000); color: #fff; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 calc(3 * var(--u)) 0 0; text-align: left; }
   .t-banner .qr { grid-area: qr; width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
   .t-banner .code { grid-area: code; } .t-banner .purpose { grid-area: purpose; }
 
@@ -129,6 +165,7 @@ const STYLE = `
   .t-qr .code { grid-area: code; } .t-qr .purpose { grid-area: purpose; }
 
   @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { background: #fff; }
     .toolbar { display: none; }
     #sheets { padding: 0; gap: 0; display: block; zoom: 1 !important; }
@@ -137,7 +174,7 @@ const STYLE = `
   }
 `;
 
-const SCRIPT = `
+const script = (page: string, defaults: PrintPageOptions["defaults"]) => `
 (function () {
   var FORMATS = {
     "a4-1": { label: "A4, 1 par page", w: 210, h: 297, c: 1, r: 1, pad: 8, gap: 0 },
@@ -147,12 +184,13 @@ const SCRIPT = `
     "a6-1": { label: "A6, 1 par page (autocollant)", w: 105, h: 148, c: 1, r: 1, pad: 4, gap: 0 }
   };
   var TEMPLATES = { side: "Picto à côté du QR", inqr: "Picto dans le QR", banner: "Bandeau", compact: "Compact / autocollant", qr: "QR seul" };
-  var DEFAULTS = { format: "a4-2", template: "side" };
+  var DEFAULTS = ${JSON.stringify(defaults)};
+  var PAGE = "${page}";
   var params = new URLSearchParams(location.search);
   function load(key, valid) {
     var v = params.get(key);
     if (v && valid[v]) return v;
-    try { v = localStorage.getItem("print-" + key); } catch (e) { v = null; }
+    try { v = localStorage.getItem("print-" + PAGE + "-" + key); } catch (e) { v = null; }
     return v && valid[v] ? v : DEFAULTS[key];
   }
   var state = { format: load("format", FORMATS), template: load("template", TEMPLATES) };
@@ -170,7 +208,7 @@ const SCRIPT = `
     select.value = state[key];
     select.onchange = function () {
       state[key] = select.value;
-      try { localStorage.setItem("print-" + key, select.value); } catch (e) {}
+      try { localStorage.setItem("print-" + PAGE + "-" + key, select.value); } catch (e) {}
       render();
     };
   }
@@ -178,6 +216,7 @@ const SCRIPT = `
   fill(document.getElementById("template"), TEMPLATES, "template");
 
   var picker = document.getElementById("picker");
+  if (cards.length < 2) document.getElementById("selection").style.display = "none";
   cards.forEach(function (card) {
     var label = document.createElement("label");
     var box = document.createElement("input");
@@ -219,30 +258,66 @@ const SCRIPT = `
 })();
 `;
 
-export function stationsPage(stations: PrintableStation[]): string {
-  const cards = stations.map(card).join("\n");
-  if (stations.length === 0) {
+export function printPage(page: string, items: PrintItem[], o: PrintPageOptions): string {
+  if (items.length === 0) {
     return `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>Stations</title><style>${STYLE}</style></head>
-<body><p class="empty">Aucune station à imprimer : activez des sabotages ou des tâches dans les paramètres.</p></body></html>`;
+<html lang="fr"><head><meta charset="utf-8"><title>${o.title}</title><style>${STYLE}</style></head>
+<body><p class="empty">${o.empty}</p></body></html>`;
   }
   return `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Stations</title>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${o.title}</title>
 <style id="pagesize">@page { size: A4; margin: 0; }</style>
 <style>${STYLE}</style></head>
 <body class="t-side">
   <header class="toolbar">
-    <h1>Stations</h1>
+    <h1>${o.title}</h1>
     <label>Modèle <select id="template"></select></label>
     <label>Format <select id="format"></select></label>
     <button id="print">Imprimer</button>
-    <p class="grow">Choisissez le même format de papier dans la boîte d'impression du navigateur (marges : aucune). Scannez avec l'appareil photo du téléphone qui vous sert à jouer, ou tapez le code dans le jeu. Valables uniquement pour la partie en cours.</p>
-    <div class="picker" id="picker"><button id="all" type="button">Tout</button><button id="none" type="button">Aucune</button></div>
+    <p class="grow">Choisissez le même format de papier dans la boîte d'impression du navigateur (marges : aucune). ${o.intro}</p>
+    <div class="picker" id="picker"><span id="selection"><button id="all" type="button">Tout</button> <button id="none" type="button">Aucune</button></span></div>
   </header>
   <div id="sheets"></div>
   <div id="pool">
-${cards}
+${items.map(card).join("\n")}
   </div>
-  <script>${SCRIPT}</script>
+  <script>${script(page, o.defaults)}</script>
 </body></html>`;
+}
+
+export function stationsPage(stations: PrintableStation[]): string {
+  const items = stations.map((st) => ({
+    id: st.id,
+    name: st.name,
+    location: st.location,
+    url: st.url,
+    code: st.code,
+    purpose: stationDef(st.id).purpose,
+    color: stationColor(st.id),
+    icon: stationIcon(st.id),
+  }));
+  return printPage("stations", items, {
+    title: "Stations",
+    intro: "Scannez avec l'appareil photo du téléphone qui vous sert à jouer, ou tapez le code dans le jeu. Valables uniquement pour la partie en cours.",
+    empty: "Aucune station à imprimer : activez des sabotages ou des tâches dans les paramètres.",
+    defaults: { format: "a4-2", template: "side" },
+  });
+}
+
+export function emergencyPage(url: string): string {
+  const item: PrintItem = {
+    id: "emergency",
+    name: "Réunion d'urgence",
+    location: "",
+    url,
+    purpose: "Scannez avec l'appareil photo du téléphone qui vous sert à jouer. Valable uniquement pour la partie en cours.",
+    color: EMERGENCY_COLOR,
+    icon: emergencyIcon(),
+  };
+  return printPage("emergency", [item], {
+    title: "Station d'urgence",
+    intro: "Valable uniquement pour la partie en cours.",
+    empty: "",
+    defaults: { format: "a4-1", template: "banner" },
+  });
 }
