@@ -3,6 +3,16 @@ import { createInitialState, reduce, timersFromState, upgradeState, type Command
 import type { Persistence } from "./persistence";
 import { Scheduler } from "./scheduler";
 
+/**
+ * Commands that only move a finger's heartbeat or a connection flag. They are not journaled
+ * and, unless they emit an event (a reactor repaired with two hands), their snapshot is
+ * deferred: a phone holding a station sends one every 1.5 s, which would rewrite the whole
+ * state on the Pi's SD card each time. Losing them on a crash is harmless: fingers expire
+ * after 4 s and everybody is marked disconnected at startup.
+ */
+const VOLATILE_COMMANDS: ReadonlySet<Command["type"]> = new Set(["station:hold", "tick:holdExpired", "system:connection"]);
+const DEFERRED_SNAPSHOT_MS = 5_000;
+
 export type ResultListener = (result: ReduceResult, command: Command, previous: GameState) => void;
 
 /**
@@ -14,6 +24,7 @@ export class GameRuntime {
   private readonly scheduler: Scheduler;
   private readonly listeners: ResultListener[] = [];
   private stopped = false;
+  private pendingSnapshot?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly persistence: Persistence,
@@ -43,10 +54,24 @@ export class GameRuntime {
     const previous = this.current;
     // Sockets closing during shutdown must not re-arm timers or write to a closed database.
     if (this.stopped) return { state: previous, events: [], timers: [], error: { code: "WRONG_PHASE", message: "Serveur arrêté" } };
-    const result = reduce(previous, command, this.clock(), this.rng);
+    let result: ReduceResult;
+    try {
+      result = reduce(previous, command, this.clock(), this.rng);
+    } catch (err) {
+      // A bug in the engine must not take the whole game down (Socket.IO handlers run in nextTick).
+      console.error(`[game] ${command.type} a échoué`, err);
+      return { state: previous, events: [], timers: [], error: { code: "BAD_REQUEST", message: "Erreur interne du serveur" } };
+    }
     if (result.error || result.state === previous) return result;
     this.current = result.state;
-    this.persistence.save(command, result.state, this.clock());
+    if (VOLATILE_COMMANDS.has(command.type) && result.events.length === 0) {
+      this.pendingSnapshot ??= setTimeout(() => this.flushSnapshot(), DEFERRED_SNAPSHOT_MS);
+    } else {
+      this.cancelPendingSnapshot();
+      this.persistence.save(command, result.state, this.clock());
+      // The journal keeps the current game and the previous one only.
+      if (result.state.gameId !== previous.gameId) this.persistence.pruneJournal([previous.gameId, result.state.gameId]);
+    }
     this.scheduler.sync(result.timers);
     for (const listener of this.listeners) listener(result, command, previous);
     return result;
@@ -57,7 +82,18 @@ export class GameRuntime {
   }
 
   stop(): void {
+    if (this.pendingSnapshot !== undefined) this.flushSnapshot();
     this.stopped = true;
     this.scheduler.clear();
+  }
+
+  private flushSnapshot(): void {
+    this.cancelPendingSnapshot();
+    if (!this.stopped) this.persistence.saveSnapshot(this.current, this.clock());
+  }
+
+  private cancelPendingSnapshot(): void {
+    if (this.pendingSnapshot !== undefined) clearTimeout(this.pendingSnapshot);
+    this.pendingSnapshot = undefined;
   }
 }
