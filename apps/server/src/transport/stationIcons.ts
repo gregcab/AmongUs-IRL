@@ -37,19 +37,31 @@ const shine = (d: string, width = 3) => path(d, "none", `stroke="${WHITE}" strok
 /** A coloured cable with its outline. */
 const wire = (d: string, color: string) => path(d, "none", `stroke="${INK}" stroke-width="7.5"`) + path(d, "none", `stroke="${color}" stroke-width="4"`);
 
+const spark = (cx: number, cy: number, r: number) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${YEL}" stroke="none"/>`;
+
+/** Rocket nozzle with its flame, tilted left or right, plus the G/D badge and an arrow. */
 function reactor(side: "left" | "right", a: string): string {
-  const flip = (x: number) => (side === "left" ? x : 64 - x);
-  const arrow = `M${flip(8)} 52L${flip(18)} 45.5V49.5H${flip(32)}V54.5H${flip(18)}V58.5z`;
+  const f = (x: number) => (side === "left" ? x : 64 - x);
+  const tilt = side === "left" ? 10 : -10;
+  const arrow = `M${f(3)} 54L${f(11)} 47.5V51.5H${f(18)}V56.5H${f(11)}V60.5z`;
+  const engine =
+    rect(22, 2, 20, 9, METAL_D, 3) +
+    circle(27, 6.5, 1.5, METAL_L) +
+    circle(37, 6.5, 1.5, METAL_L) +
+    path("M24 11h16l7 14H17z", METAL_L) +
+    shine("M26 15l-4 8", 3) +
+    rect(13, 24, 38, 5, a, 2.5) +
+    path("M16 29q-3 14 11 24l5 10 5-10q14-10 11-24z", RED) +
+    path("M22 29q-2 10 7 18l3 5 3-5q9-8 7-18z", a) +
+    path("M28 29q-1 7 4 12 5-5 4-12z", YEL);
   return svg(
-    rect(8, 44, 48, 16, METAL) +
-      rect(23, 5, 18, 7, METAL_D) +
-      rect(18, 9, 28, 38, METAL_L, 10) +
-      circle(32, 28, 11, a) +
-      circle(32, 28, 5, YEL) +
-      shine("M23 20v14") +
+    `<g transform="rotate(${tilt} 32 10)">${engine}</g>` +
       path(arrow, YEL) +
-      circle(flip(50), 18, 10, YEL) +
-      text(flip(50), 23, 14, side === "left" ? "G" : "D", INK),
+      circle(f(52), 13, 9.5, YEL) +
+      text(f(52), 18, 14, side === "left" ? "G" : "D", INK) +
+      spark(f(10), 38, 2) +
+      spark(f(56), 50, 2) +
+      spark(f(46), 60, 1.6),
   );
 }
 
