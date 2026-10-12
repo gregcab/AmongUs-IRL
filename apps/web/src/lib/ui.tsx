@@ -255,7 +255,10 @@ export function HoldPad({
   );
 }
 
-export function QrCode({ value, size, className }: { value: string; size: number; className?: string }) {
+/** Dark enough to stay readable on white; the printed QR codes use the same palette (server `stationsPrint.ts`). */
+export const QR_COLORS = { join: "#1d4ed8", body: "#b91c1c" } as const;
+
+export function QrCode({ value, size, className, color = QR_COLORS.join }: { value: string; size: number; className?: string; color?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -263,9 +266,9 @@ export function QrCode({ value, size, className }: { value: string; size: number
       width: size,
       margin: 2,
       errorCorrectionLevel: "M",
-      color: { dark: "#000000", light: "#ffffff" },
+      color: { dark: color, light: "#ffffff" },
     });
-  }, [value, size]);
+  }, [value, size, color]);
   return <canvas ref={ref} className={className} width={size} height={size} />;
 }
 

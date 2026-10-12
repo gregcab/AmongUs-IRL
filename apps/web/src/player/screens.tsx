@@ -6,7 +6,7 @@ import { Crewmate } from "../lib/crewmate";
 import { GameOverBlock, ROLE_LABEL, RulesList } from "../lib/game";
 import { SabotageInfo } from "../lib/stations";
 import { setSession } from "../lib/session";
-import { Countdown, HoldButton, HoldToReveal, Logo, PlayerChip, QrCode } from "../lib/ui";
+import { Countdown, HoldButton, HoldToReveal, Logo, PlayerChip, QR_COLORS, QrCode } from "../lib/ui";
 import { decodeQrFromFile } from "../lib/qrScan";
 import { canVibrate, vibrate, VIBRATION } from "../lib/vibration";
 import { enableWakeLock } from "../lib/wakeLock";
@@ -428,7 +428,7 @@ export function BodyScreen({ view, qr }: { view: PlayerView; qr: ServerToClientP
         <Crewmate color={view.me.color} size={30} variant="dead" />
         <span className="body-name">{view.me.name}</span>
       </div>
-      {qr ? <QrCode value={qr.url} size={size} /> : <p>Génération du QR code…</p>}
+      {qr ? <QrCode value={qr.url} size={size} color={QR_COLORS.body} /> : <p>Génération du QR code…</p>}
       {qr && (
         <div className="body-code">
           Code <b>{qr.code}</b>

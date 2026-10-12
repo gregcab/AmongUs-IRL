@@ -6,7 +6,7 @@ import { useGameConnection } from "../lib/socket";
 import { Crewmate } from "../lib/crewmate";
 import { SabotageAlert, SabotageInfo } from "../lib/stations";
 import { CrewTaskBar, TaskBar } from "../lib/taskbar";
-import { ConnectionBanner, Countdown, Logo, QrCode } from "../lib/ui";
+import { ConnectionBanner, Countdown, Logo, QR_COLORS, QrCode } from "../lib/ui";
 import "./tv.css";
 
 export function TvApp() {
@@ -174,7 +174,7 @@ function Lobby({ view }: { view: TvView }) {
         {view.practiceUrl && (
           <div className={`tv-practice${crowded ? " compact" : ""}`}>
             <div className="tv-practice-qr">
-              <QrCode value={view.practiceUrl} size={320} />
+              <QrCode value={view.practiceUrl} size={320} color={QR_COLORS.body} />
             </div>
             <div className="stack" style={{ gap: 8 }}>
               <span className="eyebrow">Entraînement au scan</span>
