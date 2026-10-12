@@ -61,6 +61,18 @@ describe("game runtime persistence", () => {
     rt.stop();
   });
 
+  it("survives an exception while broadcasting a result", () => {
+    const rt = runtime();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    rt.onResult(() => {
+      throw new Error("boom");
+    });
+    join4(rt);
+    expect(Object.keys(rt.state.players)).toHaveLength(4);
+    expect(errors).toHaveBeenCalled();
+    rt.stop();
+  });
+
   it("survives an exception in the engine", () => {
     const base = seededRng(1);
     let broken = false;

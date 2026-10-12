@@ -489,6 +489,8 @@ function revive(c: Ctx, playerId: string): Outcome {
   delete p.dyingEffectiveAt;
   c.s.timeline.push({ at: c.now, playerId: p.id, kind: "revive" });
   c.log(`${p.name} réanimé par le MJ`);
+  // Reviving an impostor may reach parity.
+  if (checkWin(c)) return;
   if (c.s.phase === "MEETING") emitRoster(c);
 }
 
@@ -727,6 +729,8 @@ function sabotageDeadline(c: Ctx, at: number): Outcome {
 
 function endGame(c: Ctx, winner: Team, reason: WinReason): void {
   const s = c.s;
+  // Deaths still counting down become effective (they already counted as alive for the winner).
+  for (const p of playersInOrder(s)) if (p.status === "DYING") finalizeDeath(c, p);
   if (s.meeting) s.meetingHistory.push(s.meeting);
   s.meeting = undefined;
   s.phase = "GAME_OVER";

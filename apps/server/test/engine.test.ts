@@ -515,6 +515,27 @@ describe("admin", () => {
     expect(upgradeState(old as never).printKey).toBe(h.state.gameId);
   });
 
+  it("ends the game when reviving an impostor reaches parity", () => {
+    const h = new Harness(FAST);
+    const { impostors, crew } = h.startGame(7);
+    h.do({ type: "admin:declareDeath", playerId: impostors[0]! });
+    for (const id of crew.slice(0, 3)) h.do({ type: "admin:declareDeath", playerId: id });
+    expect(h.state.phase).toBe("PLAYING"); // 1 impostor, 2 crewmates
+    h.do({ type: "admin:revive", playerId: impostors[0]! });
+    expect(h.state.phase).toBe("GAME_OVER");
+    expect([h.state.winner, h.state.winReason]).toEqual(["impostors", "parity"]);
+  });
+
+  it("makes pending deaths effective when the game ends", () => {
+    const h = new Harness(FAST);
+    const { crew } = h.startGame(7);
+    h.do({ type: "player:declareDeath", playerId: crew[0]! });
+    h.do({ type: "admin:endGame", winner: "crew" });
+    expect(h.status(crew[0]!)).toBe("BODY");
+    expect(h.state.players[crew[0]!]!.dyingEffectiveAt).toBeUndefined();
+    expect(h.state.timeline).toContainEqual({ at: h.now, playerId: crew[0]!, kind: "death" });
+  });
+
   it("declares deaths, revives, ends and returns to lobby", () => {
     const h = new Harness(FAST);
     const { crew } = h.startGame(7);
