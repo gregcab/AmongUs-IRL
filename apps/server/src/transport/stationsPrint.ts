@@ -1,6 +1,6 @@
 import { stationDef, type SabotageKind } from "@among-us/shared";
 import QRCode from "qrcode";
-import { emergencyIcon, stationIcon } from "./stationIcons";
+import { emergencyIcon, ICON_OUTLINE, stationIcon } from "./stationIcons";
 import type { PrintableStation } from "./socket";
 
 // Printable pages (stations, emergency QR): an editor (card template, paper format, selection)
@@ -78,8 +78,8 @@ export function qrSvg(url: string, icon: string, color = "#000"): string {
   const inner = icon.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
   const badge =
     `<g class="badge"><rect x="${x}" y="${x}" width="${side}" height="${side}" fill="#fff"/>` +
-    `<svg x="${x + pad}" y="${x + pad}" width="${side - 2 * pad}" height="${side - 2 * pad}" viewBox="0 0 64 64" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg></g>`;
-  return `<svg viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><path d="${path}" fill="${color}"/>${badge}</svg>`;
+    `<svg x="${x + pad}" y="${x + pad}" width="${side - 2 * pad}" height="${side - 2 * pad}" viewBox="0 0 64 64" fill="none"><g ${ICON_OUTLINE}>${inner}</g></svg></g>`;
+  return `<svg viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><path d="${path}" fill="${color}" style="fill:var(--c,${color})"/>${badge}</svg>`;
 }
 
 function escapeHtml(text: string): string {
@@ -122,17 +122,19 @@ const STYLE = `
   .name { font-size: calc(7.5 * var(--u)); font-weight: 800; line-height: 1.1; }
   .loc { font-size: calc(4.2 * var(--u)); margin-top: calc(.5 * var(--u)); }
   .qr > svg { display: block; width: 100%; height: 100%; }
-  .pic { color: var(--c, #000); }
   .pic .icon { display: block; width: 100%; height: 100%; }
   .code { font-size: calc(4.6 * var(--u)); }
   .code b { font-size: calc(6.4 * var(--u)); letter-spacing: .15em; }
   .purpose { font-size: calc(3.3 * var(--u)); color: #333; line-height: 1.2; max-width: 92%; }
   .badge { display: none; }
+  /* Noir et blanc: accent forced to black, pictos in greyscale (vector QR stays crisp). */
+  .bw .card { --c: #000 !important; }
+  .bw .pic .icon, .bw .badge { filter: grayscale(1); }
 
   /* Côte à côte */
-  .t-side .face { grid-template-columns: calc(34 * var(--u)) calc(50 * var(--u)); column-gap: calc(4 * var(--u));
+  .t-side .face { grid-template-columns: calc(38 * var(--u)) calc(50 * var(--u)); column-gap: calc(4 * var(--u));
     grid-template-areas: "titles titles" "pic qr" "code code" "purpose purpose"; }
-  .t-side .titles { grid-area: titles; } .t-side .pic { grid-area: pic; width: calc(34 * var(--u)); height: calc(34 * var(--u)); }
+  .t-side .titles { grid-area: titles; } .t-side .pic { grid-area: pic; width: calc(38 * var(--u)); height: calc(38 * var(--u)); }
   .t-side .qr { grid-area: qr; width: calc(50 * var(--u)); height: calc(50 * var(--u)); }
   .t-side .code { grid-area: code; } .t-side .purpose { grid-area: purpose; }
 
@@ -143,9 +145,10 @@ const STYLE = `
   .t-inqr .code { grid-area: code; } .t-inqr .purpose { grid-area: purpose; }
 
   /* Bandeau */
-  .t-banner .face { padding: 0; row-gap: calc(2 * var(--u)); grid-template-columns: calc(24 * var(--u)) 1fr; justify-content: stretch; column-gap: 0; align-content: start;
+  .t-banner .face { padding: 0; row-gap: calc(2 * var(--u)); grid-template-columns: calc(28 * var(--u)) 1fr; justify-content: stretch; column-gap: 0; align-content: start;
     grid-template-areas: "pic titles" "qr qr" "code code" "purpose purpose"; }
-  .t-banner .pic { grid-area: pic; background: var(--c, #000); color: #fff; width: 100%; height: 100%; padding: calc(4 * var(--u)); }
+  .t-banner .pic { grid-area: pic; background: var(--c, #000); width: 100%; height: 100%; padding: calc(3 * var(--u)); }
+  .t-banner .pic .icon { background: #fff; border-radius: 50%; padding: calc(1.2 * var(--u)); border: 0; }
   .t-banner .titles { grid-area: titles; background: var(--c, #000); color: #fff; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 calc(3 * var(--u)) 0 0; text-align: left; }
   .t-banner .qr { grid-area: qr; width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
   .t-banner .code { grid-area: code; } .t-banner .purpose { grid-area: purpose; }
@@ -193,7 +196,8 @@ const script = (page: string, defaults: PrintPageOptions["defaults"]) => `
     try { v = localStorage.getItem("print-" + PAGE + "-" + key); } catch (e) { v = null; }
     return v && valid[v] ? v : DEFAULTS[key];
   }
-  var state = { format: load("format", FORMATS), template: load("template", TEMPLATES) };
+  var state = { format: load("format", FORMATS), template: load("template", TEMPLATES), bw: false };
+  try { state.bw = params.get("bw") === "1" || (!params.has("bw") && localStorage.getItem("print-" + PAGE + "-bw") === "1"); } catch (e) { state.bw = params.get("bw") === "1"; }
   var pool = document.getElementById("pool");
   var sheets = document.getElementById("sheets");
   var cards = Array.prototype.slice.call(pool.children);
@@ -228,11 +232,18 @@ const script = (page: string, defaults: PrintPageOptions["defaults"]) => `
   });
   document.getElementById("all").onclick = function () { Object.keys(checks).forEach(function (k) { checks[k].checked = true; }); render(); };
   document.getElementById("none").onclick = function () { Object.keys(checks).forEach(function (k) { checks[k].checked = false; }); render(); };
+  var bw = document.getElementById("bw");
+  bw.checked = state.bw;
+  bw.onchange = function () {
+    state.bw = bw.checked;
+    try { localStorage.setItem("print-" + PAGE + "-bw", bw.checked ? "1" : "0"); } catch (e) {}
+    render();
+  };
   document.getElementById("print").onclick = function () { window.print(); };
 
   function render() {
     var f = FORMATS[state.format];
-    document.body.className = "t-" + state.template;
+    document.body.className = "t-" + state.template + (state.bw ? " bw" : "");
     document.getElementById("pagesize").textContent = "@page { size: " + f.w + "mm " + f.h + "mm; margin: 0; }";
     cards.forEach(function (c) { pool.appendChild(c); });
     sheets.textContent = "";
@@ -273,6 +284,7 @@ export function printPage(page: string, items: PrintItem[], o: PrintPageOptions)
     <h1>${o.title}</h1>
     <label>Modèle <select id="template"></select></label>
     <label>Format <select id="format"></select></label>
+    <label><input type="checkbox" id="bw"> Noir et blanc</label>
     <button id="print">Imprimer</button>
     <p class="grow">Choisissez le même format de papier dans la boîte d'impression du navigateur (marges : aucune). ${o.intro}</p>
     <div class="picker" id="picker"><span id="selection"><button id="all" type="button">Tout</button> <button id="none" type="button">Aucune</button></span></div>
@@ -294,7 +306,7 @@ export function stationsPage(stations: PrintableStation[]): string {
     code: st.code,
     purpose: stationDef(st.id).purpose,
     color: stationColor(st.id),
-    icon: stationIcon(st.id),
+    icon: stationIcon(st.id, stationColor(st.id)),
   }));
   return printPage("stations", items, {
     title: "Stations",
@@ -312,7 +324,7 @@ export function emergencyPage(url: string): string {
     url,
     purpose: "Scannez avec l'appareil photo du téléphone qui vous sert à jouer. Valable uniquement pour la partie en cours.",
     color: EMERGENCY_COLOR,
-    icon: emergencyIcon(),
+    icon: emergencyIcon(EMERGENCY_COLOR),
   };
   return printPage("emergency", [item], {
     title: "Station d'urgence",

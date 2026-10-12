@@ -1,48 +1,227 @@
 import type { StationId } from "@among-us/shared";
 
-// Line pictograms (64×64) printed next to the station QR codes. Strokes use `currentColor` so a
-// template can draw them black on white or white on black; no fills, so they print cleanly in B&W.
+// Flat colourful pictograms (64×64) printed next to the station QR codes: thick dark outline, flat
+// fills with a shade and a highlight, in the spirit of the game. The accent colour of the station
+// (the one of its card and QR code) paints the main part; metal, glass and signal colours are shared.
 
-const svg = (body: string) =>
-  `<svg class="icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const INK = "#1b1f2a";
+const METAL = "#9aa3b2";
+const METAL_D = "#6b7385";
+const METAL_L = "#d5dae3";
+const GLASS = "#bae6fd";
+const YEL = "#facc15";
+const RED = "#ef4444";
+const GREEN = "#22c55e";
+const BLUE = "#3b82f6";
+const WHITE = "#ffffff";
 
-const reactor = (side: "left" | "right") =>
-  svg(
-    `<circle cx="32" cy="28" r="5"/><ellipse cx="32" cy="28" rx="22" ry="8"/><ellipse cx="32" cy="28" rx="22" ry="8" transform="rotate(60 32 28)"/><ellipse cx="32" cy="28" rx="22" ry="8" transform="rotate(-60 32 28)"/>` +
-      (side === "left" ? `<path d="M26 56h-14m6-6-6 6 6 6"/>` : `<path d="M38 56h14m-6-6 6 6-6 6"/>`),
-  );
+/** Outline attributes shared by every icon; the QR badge wraps the icon body in a `<g>` carrying them. */
+export const ICON_OUTLINE = `stroke="${INK}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"`;
 
-const key = (letter: string) =>
-  svg(`<circle cx="20" cy="32" r="12"/><path d="M32 32h26m-8 0v9m-9-9v7"/><text x="20" y="37" font-size="14" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">${letter}</text>`);
-
-const ICONS: Record<StationId, string> = {
-  "reactor-a": reactor("left"),
-  "reactor-b": reactor("right"),
-  "o2-a": svg(`<path d="M10 10h44L38 32v18l-12 6V32z"/><circle cx="20" cy="58" r="1"/><circle cx="32" cy="60" r="1"/><circle cx="44" cy="58" r="1"/>`),
-  "o2-b": svg(`<rect x="20" y="16" width="24" height="42" rx="10"/><path d="M27 16v-6h10v6M32 10V5"/><text x="32" y="43" font-size="13" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">O₂</text>`),
-  admin: svg(`<rect x="6" y="10" width="52" height="34" rx="3"/><path d="M22 54h20M32 44v10M14 20h22M14 28h30M14 36h16"/>`),
-  electrical: svg(`<rect x="10" y="6" width="44" height="52" rx="3"/><path d="M36 14 22 34h10l-4 16 14-20H32z"/>`),
-  comms: svg(`<path d="M12 30a20 20 0 0 0 28 8L16 14a20 20 0 0 0-4 16z"/><path d="m34 30 14 14M44 24a14 14 0 0 1 8 8M48 16a22 22 0 0 1 12 14M22 56h20M32 46v10"/>`),
-  card: svg(`<rect x="6" y="14" width="52" height="34" rx="4"/><path d="M6 24h52M14 38h12M34 38h6"/><path d="M32 52v8m-5-5 5 5 5-5"/>`),
-  "data-download": svg(`<path d="M32 6v32m-12-12 12 12 12-12M8 40v14h48V40"/>`),
-  "data-upload": svg(`<path d="M32 40V8m-12 12L32 8l12 12M8 40v14h48V40"/>`),
-  "fuel-tank": svg(`<path d="M14 18h28l8 8v32H14z"/><path d="M42 18l-6-8H22l-4 8M24 38h16M28 30h8"/>`),
-  engine: svg(`<circle cx="32" cy="32" r="10"/><path d="M32 6v10m0 32v10M6 32h10m32 0h10M13 13l7 7m24 24 7 7M51 13l-7 7M20 44l-7 7"/>`),
-  wires: svg(`<path d="M6 16h14c14 0 14 16 28 16h10M6 32h14c14 0 14 16 28 16h10M6 48h14c14 0 14-32 28-32h10"/><circle cx="6" cy="16" r="2"/><circle cx="6" cy="32" r="2"/><circle cx="6" cy="48" r="2"/>`),
-  safe: svg(`<rect x="8" y="8" width="48" height="48" rx="3"/><circle cx="32" cy="32" r="12"/><path d="M32 32l8-8M32 20v4M32 40v4M20 32h4M40 32h4M14 56v4M50 56v4"/>`),
-  distributor: svg(`<path d="M16 8v48M32 8v48M48 8v48"/><rect x="10" y="14" width="12" height="8" rx="2"/><rect x="26" y="34" width="12" height="8" rx="2"/><rect x="42" y="22" width="12" height="8" rx="2"/>`),
-  simon: svg(`<rect x="8" y="8" width="22" height="22" rx="5"/><rect x="34" y="8" width="22" height="22" rx="5"/><rect x="8" y="34" width="22" height="22" rx="5"/><rect x="34" y="34" width="22" height="22" rx="5"/>`),
-  antenna: svg(`<path d="M32 26v34M20 60h24M32 26 22 56M32 26l10 30"/><circle cx="32" cy="22" r="4"/><path d="M22 14a14 14 0 0 0 0 16M42 14a14 14 0 0 1 0 16M14 8a24 24 0 0 0 0 28M50 8a24 24 0 0 1 0 28"/>`),
-  "key-a": key("A"),
-  "key-b": key("B"),
-  shield: svg(`<path d="M32 6 10 14v16c0 14 9 24 22 28 13-4 22-14 22-28V14z"/><path d="m22 32 7 7 13-14"/>`),
-};
-
-/** Siren: the emergency meeting button. */
-export function emergencyIcon(): string {
-  return svg(`<path d="M16 54V34a16 16 0 0 1 32 0v20z"/><path d="M10 54h44M32 6v6M12 14l4 4M52 14l-4 4M6 28h6M52 28h6M25 34a7 7 0 0 1 7-7"/>`);
+/** Mixes `hex` with `other` (`t` = share of `other`, 0..1). */
+function mix(hex: string, other: string, t: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(1 + 2 * i, 3 + 2 * i), 16);
+  const out = [0, 1, 2].map((i) => Math.round(ch(hex, i) * (1 - t) + ch(other, i) * t).toString(16).padStart(2, "0"));
+  return `#${out.join("")}`;
 }
 
-export function stationIcon(id: StationId): string {
-  return ICONS[id];
+const svg = (body: string) => `<svg class="icon" viewBox="0 0 64 64" fill="none" ${ICON_OUTLINE} aria-hidden="true">${body}</svg>`;
+
+const rect = (x: number, y: number, w: number, h: number, fill: string, r = 2) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}"/>`;
+const path = (d: string, fill = "none", extra = "") => `<path d="${d}" fill="${fill}" ${extra}/>`;
+const circle = (cx: number, cy: number, r: number, fill: string) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`;
+const text = (x: number, y: number, size: number, value: string, fill: string) =>
+  `<text x="${x}" y="${y}" font-size="${size}" font-weight="800" text-anchor="middle" font-family="sans-serif" fill="${fill}" stroke="none">${value}</text>`;
+/** A highlight stroke (no outline). */
+const shine = (d: string, width = 3) => path(d, "none", `stroke="${WHITE}" stroke-opacity=".7" stroke-width="${width}"`);
+/** A coloured cable with its outline. */
+const wire = (d: string, color: string) => path(d, "none", `stroke="${INK}" stroke-width="7.5"`) + path(d, "none", `stroke="${color}" stroke-width="4"`);
+
+function reactor(side: "left" | "right", a: string): string {
+  const flip = (x: number) => (side === "left" ? x : 64 - x);
+  const arrow = `M${flip(8)} 52L${flip(18)} 45.5V49.5H${flip(32)}V54.5H${flip(18)}V58.5z`;
+  return svg(
+    rect(8, 44, 48, 16, METAL) +
+      rect(23, 5, 18, 7, METAL_D) +
+      rect(18, 9, 28, 38, METAL_L, 10) +
+      circle(32, 28, 11, a) +
+      circle(32, 28, 5, YEL) +
+      shine("M23 20v14") +
+      path(arrow, YEL) +
+      circle(flip(50), 18, 10, YEL) +
+      text(flip(50), 23, 14, side === "left" ? "G" : "D", INK),
+  );
+}
+
+const key = (letter: string, a: string) =>
+  svg(
+    rect(26, 26, 32, 9, METAL_L, 3) +
+      (letter === "A" ? rect(44, 35, 6, 11, METAL_L, 1.5) + rect(35, 35, 6, 7, METAL_L, 1.5) : rect(50, 35, 6, 12, METAL_L, 1.5) + rect(40, 35, 6, 8, METAL_L, 1.5)) +
+      circle(20, 30, 16, a) +
+      (letter === "B" ? circle(20, 30, 12, mix(a, "#000000", 0.3)) : "") +
+      shine("M11 24a11 11 0 0 1 8-7") +
+      text(20, 37, 20, letter, WHITE),
+  );
+
+function icons(a: string): Record<StationId, string> {
+  const ad = mix(a, "#000000", 0.28);
+  const al = mix(a, "#ffffff", 0.55);
+  return {
+    "reactor-a": reactor("left", a),
+    "reactor-b": reactor("right", a),
+    "o2-a": svg(
+      path("M8 8h48L40 30v20l-16 8V30z", GLASS) +
+        path("M15 15h34M20 22h24", "none", `stroke-width="2"`) +
+        circle(50, 44, 5, al) +
+        circle(56, 56, 4, a) +
+        circle(46, 58, 3, al) +
+        shine("M13 11h22", 2.5),
+    ),
+    "o2-b": svg(
+      rect(23, 7, 18, 7, METAL_D) +
+        rect(26, 12, 12, 10, METAL, 2) +
+        rect(16, 20, 32, 40, a, 13) +
+        shine("M24 28v20", 4) +
+        text(34, 47, 15, "O₂", WHITE) +
+        circle(53, 12, 7, WHITE) +
+        path("M53 12l3-3", "none", `stroke-width="2"`),
+    ),
+    admin: svg(
+      path("M24 58h16l-3-14H27z", METAL) +
+        rect(16, 54, 32, 6, METAL_D) +
+        rect(5, 6, 54, 40, METAL_D, 5) +
+        rect(10, 11, 44, 30, ad, 3) +
+        path("M16 19h18M16 26h26M16 33h14", "none", `stroke="${al}" stroke-width="3"`) +
+        circle(46, 33, 4, a),
+    ),
+    electrical: svg(
+      rect(8, 4, 48, 56, METAL, 5) +
+        rect(13, 9, 38, 46, METAL_L, 3) +
+        rect(17, 13, 8, 26, METAL_D, 4) +
+        rect(28, 13, 8, 26, METAL_D, 4) +
+        rect(39, 13, 8, 26, METAL_D, 4) +
+        rect(15, 15, 12, 10, a, 3) +
+        rect(26, 27, 12, 10, YEL, 3) +
+        rect(37, 15, 12, 10, a, 3) +
+        path("M35 41 25 51h7l-3 8 12-12h-7z", YEL),
+    ),
+    comms: svg(
+      path("M23 40v14M14 58h20", METAL_D, `stroke-width="3"`) +
+        path("M8 30a22 22 0 0 0 30 12L14 10A22 22 0 0 0 8 30z", METAL_L) +
+        path("M22 28l14-14", "none", `stroke-width="3"`) +
+        circle(38, 12, 5, a) +
+        path("M46 18a12 12 0 0 1 6 8M50 8a22 22 0 0 1 10 16", "none", `stroke="${a}" stroke-width="3.5"`) +
+        shine("M13 24a14 14 0 0 0 6 10", 2.5),
+    ),
+    card: svg(
+      path("M14 14h30M38 8l6 6-6 6", "none", `stroke-width="3"`) +
+        rect(5, 24, 54, 34, a, 6) +
+        rect(5, 31, 54, 9, INK, 0) +
+        rect(11, 45, 14, 9, YEL, 2) +
+        rect(31, 46, 20, 3, WHITE, 1) +
+        rect(31, 52, 12, 3, WHITE, 1),
+    ),
+    "data-download": svg(
+      path("M23 4h18v18h11L32 42 12 22h11z", GREEN) +
+        shine("M27 9v13", 3) +
+        rect(5, 44, 54, 16, METAL, 5) +
+        rect(10, 49, 44, 6, INK, 3) +
+        rect(10, 49, 28, 6, a, 3),
+    ),
+    "data-upload": svg(
+      path("M23 42h18V24h11L32 4 12 24h11z", BLUE) +
+        shine("M27 29v13", 3) +
+        rect(5, 44, 54, 16, METAL, 5) +
+        rect(10, 49, 44, 6, INK, 3) +
+        rect(10, 49, 16, 6, a, 3),
+    ),
+    "fuel-tank": svg(
+      path("M16 20v-6a5 5 0 0 1 5-5h12a5 5 0 0 1 5 5v6", "none", `stroke-width="3.5"`) +
+        path("M9 22h32l12 12v22a5 5 0 0 1-5 5H14a5 5 0 0 1-5-5z", a) +
+        rect(40, 8, 12, 9, YEL, 2) +
+        path("M30 33c-6 7-9 10-9 15a9 9 0 0 0 18 0c0-5-3-8-9-15z", YEL) +
+        shine("M14 28v22", 3),
+    ),
+    engine: svg(
+      rect(19, 8, 22, 12, METAL, 3) +
+        rect(8, 18, 42, 30, a, 6) +
+        rect(13, 23, 32, 7, ad, 2) +
+        rect(50, 26, 9, 8, METAL, 2) +
+        circle(29, 40, 8, METAL_L) +
+        circle(29, 40, 3, METAL_D) +
+        path("M29 29v3M29 48v3M18 40h3M37 40h3", "none", `stroke-width="3"`) +
+        rect(5, 49, 48, 9, METAL_D, 3),
+    ),
+    wires: svg(
+      rect(3, 6, 58, 52, METAL_D, 6) +
+        wire("M11 17h10c12 0 12 28 22 28h10", RED) +
+        wire("M11 32h10c12 0 12-14 22-14h10", YEL) +
+        wire("M11 46h10c12 0 12-14 22-14h10", BLUE) +
+        circle(10, 17, 4.5, a) +
+        circle(10, 32, 4.5, a) +
+        circle(10, 46, 4.5, a) +
+        circle(54, 18, 4, METAL_L) +
+        circle(54, 32, 4, METAL_L) +
+        circle(54, 45, 4, METAL_L),
+    ),
+    safe: svg(
+      rect(10, 56, 8, 5, METAL_D, 1) +
+        rect(46, 56, 8, 5, METAL_D, 1) +
+        rect(5, 5, 54, 52, METAL, 6) +
+        rect(10, 10, 44, 42, a, 4) +
+        circle(32, 31, 14, METAL_L) +
+        circle(32, 31, 5, METAL_D) +
+        path("M32 31l8-8M32 19v4M32 39v4M20 31h4M40 31h4", "none", `stroke-width="2.6"`) +
+        shine("M14 16v16", 2.5),
+    ),
+    distributor: svg(
+      rect(5, 6, 54, 52, METAL_D, 6) +
+        rect(13, 12, 8, 40, INK, 4) +
+        rect(28, 12, 8, 40, INK, 4) +
+        rect(43, 12, 8, 40, INK, 4) +
+        rect(9, 16, 16, 10, YEL, 3) +
+        rect(24, 36, 16, 10, a, 3) +
+        rect(39, 24, 16, 10, GREEN, 3),
+    ),
+    simon: svg(
+      rect(3, 3, 58, 58, a, 14) +
+        rect(9, 9, 21, 21, GREEN, 6) +
+        rect(34, 9, 21, 21, RED, 6) +
+        rect(9, 34, 21, 21, YEL, 6) +
+        rect(34, 34, 21, 21, BLUE, 6) +
+        shine("M13 15a6 6 0 0 1 5-4M38 15a6 6 0 0 1 5-4M13 40a6 6 0 0 1 5-4M38 40a6 6 0 0 1 5-4", 2.5),
+    ),
+    antenna: svg(
+      path("M20 8a16 16 0 0 0 0 16M12 4a24 24 0 0 0 0 24M44 8a16 16 0 0 1 0 16M52 4a24 24 0 0 1 0 24", "none", `stroke="${a}" stroke-width="3.5"`) +
+        path("M32 24 21 56h22z", METAL) +
+        path("M26 42h12M29 33h6", "none") +
+        path("M24 56l16-14M40 56L24 42", "none", `stroke-width="2"`) +
+        circle(32, 16, 7, a) +
+        shine("M28 13a5 5 0 0 1 4-3", 2.5) +
+        rect(14, 55, 36, 6, METAL_D, 2),
+    ),
+    "key-a": key("A", a),
+    "key-b": key("B", a),
+    shield: svg(
+      path("M32 3 7 12v19c0 15 10 25 25 30 15-5 25-15 25-30V12z", a) +
+        path("M32 11 15 17v13c0 10 7 17 17 21 10-4 17-11 17-21V17z", al) +
+        path("M32 11v40", "none", `stroke-width="2"`) +
+        path("M22 31l7 7 13-14", "none", `stroke="${WHITE}" stroke-width="5.5"`),
+    ),
+  };
+}
+
+/** Siren: the emergency meeting button. */
+export function emergencyIcon(accent: string): string {
+  return svg(
+    path("M32 2v7M9 11l5 5M55 11l-5 5M1 30h8M55 30h8", "none", `stroke="${YEL}" stroke-width="3.5"`) +
+      rect(10, 46, 44, 13, METAL_D, 4) +
+      path("M15 46V30a17 17 0 0 1 34 0v16z", accent) +
+      shine("M21 41V31a11 11 0 0 1 8-10", 3.5) +
+      circle(32, 36, 4, YEL),
+  );
+}
+
+export function stationIcon(id: StationId, accent: string): string {
+  return icons(accent)[id];
 }

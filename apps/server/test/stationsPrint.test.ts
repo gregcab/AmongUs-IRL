@@ -1,13 +1,19 @@
 import { STATION_IDS } from "@among-us/shared";
 import jsQR from "jsqr";
 import { describe, expect, it } from "vitest";
-import { stationIcon } from "../src/transport/stationIcons";
+import { emergencyIcon, stationIcon } from "../src/transport/stationIcons";
 import type { PrintableStation } from "../src/transport/socket";
 import { badgeBounds, emergencyPage, EMERGENCY_COLOR, qrMatrix, stationColor, stationsPage } from "../src/transport/stationsPrint";
 
 describe("station print page", () => {
   it("has an icon for every station", () => {
-    for (const id of STATION_IDS) expect(stationIcon(id)).toMatch(/^<svg class="icon"[\s\S]*<\/svg>$/);
+    for (const id of STATION_IDS) {
+      const icon = stationIcon(id, "#c2410c");
+      expect(icon).toMatch(/^<svg class="icon"[\s\S]*<\/svg>$/);
+      expect(icon).toContain("#c2410c");
+      expect(icon).not.toMatch(/<script|onload|href/i);
+    }
+    expect(emergencyIcon("#b91c1c")).toContain("#b91c1c");
   });
 
   it.each([...STATION_IDS.map((id) => [id, stationColor(id)] as const), ["emergency", EMERGENCY_COLOR] as const])(
@@ -55,5 +61,6 @@ describe("station print page", () => {
     expect(html).toContain(`--c:${EMERGENCY_COLOR}`);
     expect(html).toContain('class="icon"');
     expect(html).not.toContain("Code <b>");
+    expect(html).toContain('id="bw"');
   });
 });
