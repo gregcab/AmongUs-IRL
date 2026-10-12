@@ -476,7 +476,7 @@ Un instantané enregistré par une version antérieure est complété au chargem
 | `longTasks` | 1 | Tâches longues par joueur (0 à 3) |
 | `shortTasks` | 3 | Tâches courtes par joueur (0 à 8) |
 | `taskBarUpdates` | `"always"` | Barre visible des joueurs et de la TV : `"always"`, `"meetings"` (mise à jour seulement en réunion) ou `"never"` |
-| `enabledSabotages` | `["reactor", "oxygen", "lights"]` | Sabotages possibles (§18) |
+| `enabledSabotages` | les 4 sabotages (`["reactor", "oxygen", "lights", "comms"]`) | Sabotages possibles (§18) |
 | `sabotageCriticalSeconds` | 60 | Compte à rebours des sabotages critiques |
 | `sabotageCooldownSeconds` | 90 | Délai commun aux imposteurs, après le début du jeu, chaque sabotage et chaque réunion |
 
