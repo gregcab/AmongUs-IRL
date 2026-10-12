@@ -218,6 +218,9 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
 
   apps/web:
     dependencies:

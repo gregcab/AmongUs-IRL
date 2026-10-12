@@ -318,8 +318,11 @@ describe("server integration", () => {
     expect((await fetch(`${url}/api/print/stations`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/stations`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });
     const html = await res.text();
-    expect(html.match(/<svg/g)).toHaveLength(STATION_IDS.length);
+    expect(html.match(/class="card"/g)).toHaveLength(STATION_IDS.length);
+    expect(html.match(/class="icon"/g)).toHaveLength(STATION_IDS.length);
     expect(html).toContain("Électricité");
+    expect(html).toContain('id="template"');
+    expect(html).toContain('id="format"');
   });
 
   it("serves the printable emergency page to the admin only", async () => {
