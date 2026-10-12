@@ -67,7 +67,7 @@ La référence complète des règles et du fonctionnement est dans [SPEC.md](SPE
 - Un Raspberry Pi 5 ou un mini-PC avec Docker, branché sur le routeur Wi-Fi de la soirée.
 - Un routeur Wi-Fi local. Internet n'est pas nécessaire pendant la partie.
 - Une TV ou un vidéoprojecteur relié à un navigateur (ordinateur, clé HDMI…).
-- Une imprimante pour le QR code de la station d'urgence et les QR codes des stations (tâches et sabotages) (une imprimante couleur est un plus : les QR et les illustrations sont en couleur, avec une option noir et blanc).
+- Une imprimante pour le QR code de la station d'urgence et les QR codes des stations (tâches et sabotages). Une imprimante couleur est un plus : les QR et les illustrations sont en couleur, avec une option noir et blanc pour les imprimantes monochromes.
 - Un téléphone chargé par joueur, avec un navigateur récent.
 
 ### Installation (à faire chez soi, avec internet)
@@ -103,7 +103,11 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 1. Ouvrez `/tv` sur l'écran partagé et cliquez une fois pour activer le son.
 2. Ouvrez `/admin` et entrez le code. Réglez les paramètres : durées, nombre d'imposteurs, mode des fantômes, tâches (lesquelles, combien par joueur, visibilité de la barre de progression) et sabotages (lesquels, compte à rebours, délai entre deux sabotages).
 3. Dans le panneau **Stations**, donnez à chaque station un nom et un lieu (ex. « Moteur », « Jardin ») : les joueurs les voient dans leur liste de tâches. Éloignez les deux étapes des tâches longues, les deux stations Réacteur, les deux stations O2 et les deux Clés.
-4. Imprimez **QR d'urgence (imprimer)** et **Stations (imprimer)**, puis collez chaque page à sa place. Chaque page est un petit éditeur avec aperçu des feuilles : choisissez le **modèle** de carte (illustration à côté du QR, illustration au centre du QR, bandeau, compact pour autocollant, QR seul), le **format** (A4 à 1, 2 ou 4 par page, A5, A6), cochez les stations à imprimer et activez **Noir et blanc** pour une imprimante monochrome. Choisissez le même format de papier dans la boîte d'impression du navigateur, avec des marges nulles. Les QR sont colorés selon le type de station (rouge pour l'urgence) et chaque station a son illustration. Ces QR codes restent valables d'une partie à l'autre : inutile de les réimprimer après « Rejouer ». Le bouton **Renouveler les QR** (panneau Stations, au lobby) les invalide tous, par exemple si quelqu'un en a gardé une photo ; il faut alors réimprimer.
+4. Imprimez **QR d'urgence (imprimer)** et **Stations (imprimer)**, puis collez chaque page à sa place.
+   - Chaque page est un petit éditeur avec un aperçu fidèle des feuilles. Choisissez le **modèle** de carte (illustration à côté du QR, illustration au centre du QR, bandeau, compact pour autocollant, QR seul) et le **format** (A4 à 1, 2 ou 4 par page, A5, A6). Sur la page des stations, vous pouvez décocher celles que vous ne voulez pas imprimer.
+   - Chaque station a son illustration, et les QR sont colorés selon le type de station (rouge pour l'urgence). Cochez **Noir et blanc** pour une imprimante monochrome.
+   - Dans la boîte d'impression du navigateur, choisissez le même format de papier, avec des marges nulles.
+   - Ces QR codes restent valables d'une partie à l'autre : inutile de les réimprimer après « Rejouer ». Le bouton **Renouveler les QR** (panneau Stations, au lobby) les invalide tous, par exemple si quelqu'un en a gardé une photo ; il faut alors réimprimer.
 5. Les joueurs scannent le QR code de la TV, choisissent un pseudo et une couleur, puis touchent **Je suis prêt**. Ce bouton active le son, teste la vibration et garde l'écran allumé.
 6. **Entraînement au scan** : chaque joueur scanne le petit QR d'essai affiché sur la TV avec l'appareil photo de son téléphone. « Scan OK » s'affiche sur son téléphone, sur la TV et dans la console : l'appareil photo ouvre bien le jeu. Sinon, la page conseille de rejoindre la partie avec le navigateur par défaut du téléphone.
 7. Lancez la partie depuis la console.
@@ -117,8 +121,8 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 - **Tâches** : chaque joueur a sa liste (par défaut 1 commune, 1 longue, 3 courtes). Il scanne la station indiquée (ou tape le code imprimé dessous avec **Code d'une station**) et fait le mini-jeu sur son téléphone. Les imposteurs ont une fausse liste qui ne fait pas avancer la barre ; les fantômes continuent leurs tâches. Quand la barre est pleine, les équipiers gagnent.
 - **Sabotages** : un imposteur maintient la zone « Maintenir pour voir ton rôle », glisse le doigt sur « saboter » et relâche. Tous les téléphones et la TV donnent l'alerte :
   - **Réacteur** : deux joueurs posent le doigt en même temps sur les deux stations Réacteur ;
-  - **Oxygène** : lire les deux codes à la station Admin, puis les taper aux deux stations O2 ;
-  - **Lumières** : remettre les interrupteurs à la station Électricité ; en attendant, impossible de signaler un corps ;
+  - **Oxygène** : chaque station O2 affiche son propre code, à taper sur place ; il faut valider les deux stations O2. La station Admin (facultative) affiche les deux codes ;
+  - **Lumières** : remettre les interrupteurs à la station Électricité ; en attendant, impossible de signaler un corps (ni par scan, ni par code) ;
   - **Communications** : régler la radio à la station Communications ; en attendant, les vivants ne voient plus leurs tâches ni la barre et ne peuvent pas en faire (une tâche déjà commencée se termine, les fantômes continuent).
 
   Réacteur et oxygène non réparés à temps : victoire des imposteurs. Pendant ces deux sabotages, le bouton d'urgence est bloqué ; toute réunion annule le sabotage.
@@ -140,7 +144,7 @@ Prérequis : Node.js 22 ou plus récent, et pnpm (`corepack enable pnpm`).
 ```bash
 pnpm install
 pnpm dev          # serveur (port 8080) + Vite (port 5173) avec rechargement à chaud
-pnpm test         # tests Vitest (moteur, jetons, intégration réseau, redémarrage)
+pnpm test         # tests Vitest (moteur, jetons, pages d'impression, intégration réseau, redémarrage)
 pnpm typecheck
 pnpm build        # build de production (web + serveur)
 pnpm start        # lance le build de production
