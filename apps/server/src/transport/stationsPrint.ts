@@ -148,7 +148,7 @@ const STYLE = `
   .t-banner .face { padding: 0; row-gap: calc(2 * var(--u)); grid-template-columns: calc(28 * var(--u)) 1fr; justify-content: stretch; column-gap: 0; align-content: start;
     grid-template-areas: "pic titles" "qr qr" "code code" "purpose purpose"; }
   .t-banner .pic { grid-area: pic; background: var(--c, #000); width: 100%; height: 100%; padding: calc(3 * var(--u)); }
-  .t-banner .pic .icon { background: #fff; border-radius: 50%; padding: calc(1.2 * var(--u)); border: 0; }
+  .t-banner .pic .icon { background: #fff; border-radius: calc(4 * var(--u)); padding: calc(1 * var(--u)); border: 0; }
   .t-banner .titles { grid-area: titles; background: var(--c, #000); color: #fff; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 calc(3 * var(--u)) 0 0; text-align: left; }
   .t-banner .qr { grid-area: qr; width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
   .t-banner .code { grid-area: code; } .t-banner .purpose { grid-area: purpose; }
