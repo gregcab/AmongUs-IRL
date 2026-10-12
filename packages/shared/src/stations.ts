@@ -85,6 +85,8 @@ export const LIGHT_SWITCHES = 5;
 export const COMMS_DIAL_MAX = 100;
 /** Communications: a dial this close to the target (either way) counts as tuned. */
 export const COMMS_TOLERANCE = 3;
+/** Communications: the dial must stay tuned this long (checked by the server). */
+export const COMMS_HOLD_MS = 1_000;
 
 /** Game-master labels for a station; empty fields fall back to the defaults. */
 export interface StationSetup {

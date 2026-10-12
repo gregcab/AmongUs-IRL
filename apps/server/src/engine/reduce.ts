@@ -20,6 +20,7 @@ import { ALL, Ctx, fail, type Outcome } from "./ctx";
 import {
   adminRepair,
   clearSabotage,
+  commsTuned,
   holdExpired,
   isCritical,
   openStation,
@@ -140,6 +141,8 @@ function handle(c: Ctx, cmd: Command): Outcome {
     }
     case "tick:shieldCharged":
       return afterTask(c, shieldCharged(c, cmd.at));
+    case "tick:commsTuned":
+      return commsTuned(c, cmd.playerId, cmd.at);
   }
 }
 

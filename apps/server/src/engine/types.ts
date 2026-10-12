@@ -65,7 +65,8 @@ export type Command =
   | { type: "tick:killReady"; at: number }
   | { type: "tick:sabotageDeadline"; at: number }
   | { type: "tick:holdExpired"; stationId: StationId; playerId: string; until: number }
-  | { type: "tick:shieldCharged"; at: number };
+  | { type: "tick:shieldCharged"; at: number }
+  | { type: "tick:commsTuned"; playerId: string; at: number };
 
 export type CommandType = Command["type"];
 export type TickCommand = Extract<Command, { type: `tick:${string}` }>;

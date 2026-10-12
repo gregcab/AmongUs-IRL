@@ -4,13 +4,18 @@ import type { Persistence } from "./persistence";
 import { Scheduler } from "./scheduler";
 
 /**
- * Commands that only move a finger's heartbeat or a connection flag. They are not journaled
+ * Commands that only move a finger's heartbeat, a radio dial or a connection flag. They are not journaled
  * and, unless they emit an event (a reactor repaired with two hands), their snapshot is
  * deferred: a phone holding a station sends one every 1.5 s, which would rewrite the whole
  * state on the Pi's SD card each time. Losing them on a crash is harmless: fingers expire
  * after 4 s and everybody is marked disconnected at startup.
  */
-const VOLATILE_COMMANDS: ReadonlySet<Command["type"]> = new Set(["station:hold", "tick:holdExpired", "system:connection"]);
+const VOLATILE_COMMANDS: ReadonlySet<Command["type"]> = new Set([
+  "station:hold",
+  "station:tune",
+  "tick:holdExpired",
+  "system:connection",
+]);
 const DEFERRED_SNAPSHOT_MS = 5_000;
 
 export type ResultListener = (result: ReduceResult, command: Command, previous: GameState) => void;
