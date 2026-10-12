@@ -329,7 +329,10 @@ describe("server integration", () => {
     expect((await fetch(`${url}/api/print/emergency`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/emergency`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("<svg");
+    const html = await res.text();
+    expect(html).toContain("<svg");
+    expect(html).toContain('class="icon"');
+    expect(html).toContain('id="template"');
   });
 
   it("upgrades a snapshot saved before new parameters existed", async () => {
