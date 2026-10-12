@@ -67,7 +67,7 @@ La référence complète des règles et du fonctionnement est dans [SPEC.md](SPE
 - Un Raspberry Pi 5 ou un mini-PC avec Docker, branché sur le routeur Wi-Fi de la soirée.
 - Un routeur Wi-Fi local. Internet n'est pas nécessaire pendant la partie.
 - Une TV ou un vidéoprojecteur relié à un navigateur (ordinateur, clé HDMI…).
-- Une imprimante pour le QR code de la station d'urgence et les QR codes des stations (tâches et sabotages).
+- Une imprimante pour le QR code de la station d'urgence et les QR codes des stations (tâches et sabotages) (une imprimante couleur est un plus : les QR et les illustrations sont en couleur, avec une option noir et blanc).
 - Un téléphone chargé par joueur, avec un navigateur récent.
 
 ### Installation (à faire chez soi, avec internet)
@@ -103,7 +103,7 @@ La partie est enregistrée dans `./data` (SQLite). Si le Pi redémarre, la parti
 1. Ouvrez `/tv` sur l'écran partagé et cliquez une fois pour activer le son.
 2. Ouvrez `/admin` et entrez le code. Réglez les paramètres : durées, nombre d'imposteurs, mode des fantômes, tâches (lesquelles, combien par joueur, visibilité de la barre de progression) et sabotages (lesquels, compte à rebours, délai entre deux sabotages).
 3. Dans le panneau **Stations**, donnez à chaque station un nom et un lieu (ex. « Moteur », « Jardin ») : les joueurs les voient dans leur liste de tâches. Éloignez les deux étapes des tâches longues, les deux stations Réacteur, les deux stations O2 et les deux Clés.
-4. Imprimez **QR d'urgence (imprimer)** et **Stations (imprimer)**, puis collez chaque page à sa place. Ces QR codes restent valables d'une partie à l'autre : inutile de les réimprimer après « Rejouer ». Le bouton **Renouveler les QR** (panneau Stations, au lobby) les invalide tous, par exemple si quelqu'un en a gardé une photo ; il faut alors réimprimer.
+4. Imprimez **QR d'urgence (imprimer)** et **Stations (imprimer)**, puis collez chaque page à sa place. Chaque page est un petit éditeur avec aperçu des feuilles : choisissez le **modèle** de carte (illustration à côté du QR, illustration au centre du QR, bandeau, compact pour autocollant, QR seul), le **format** (A4 à 1, 2 ou 4 par page, A5, A6), cochez les stations à imprimer et activez **Noir et blanc** pour une imprimante monochrome. Choisissez le même format de papier dans la boîte d'impression du navigateur, avec des marges nulles. Les QR sont colorés selon le type de station (rouge pour l'urgence) et chaque station a son illustration. Ces QR codes restent valables d'une partie à l'autre : inutile de les réimprimer après « Rejouer ». Le bouton **Renouveler les QR** (panneau Stations, au lobby) les invalide tous, par exemple si quelqu'un en a gardé une photo ; il faut alors réimprimer.
 5. Les joueurs scannent le QR code de la TV, choisissent un pseudo et une couleur, puis touchent **Je suis prêt**. Ce bouton active le son, teste la vibration et garde l'écran allumé.
 6. **Entraînement au scan** : chaque joueur scanne le petit QR d'essai affiché sur la TV avec l'appareil photo de son téléphone. « Scan OK » s'affiche sur son téléphone, sur la TV et dans la console : l'appareil photo ouvre bien le jeu. Sinon, la page conseille de rejoindre la partie avec le navigateur par défaut du téléphone.
 7. Lancez la partie depuis la console.
