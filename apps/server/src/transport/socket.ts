@@ -63,6 +63,9 @@ export interface TransportOptions {
 }
 
 const GROUP_ROOMS = ["alive", "impostors", "ghosts"] as const;
+/** Per-socket event budget: bursts of `RATE_BURST`, then `RATE_PER_SECOND` (dial moves, heartbeats…). */
+const RATE_BURST = 30;
+const RATE_PER_SECOND = 15;
 const CODE_MAX_FAILURES = 5;
 const CODE_LOCK_MS = 30_000;
 
@@ -124,7 +127,13 @@ export class Transport {
     this.adminAuth = new AdminAuth(opts.adminPin, opts.clock);
     this.io.on("connection", (socket) => this.onConnection(socket));
     runtime.onResult((result, command, previous) => this.onResult(result, command, previous));
-    this.bodyTimer = setInterval(() => this.pushBodyQrs(), 1000);
+    this.bodyTimer = setInterval(() => {
+      try {
+        this.pushBodyQrs();
+      } catch (err) {
+        console.error("[transport] QR de corps en échec", err);
+      }
+    }, 1000);
   }
 
   get joinUrl(): string {
@@ -167,6 +176,7 @@ export class Transport {
   private onConnection(socket: GameSocket): void {
     const auth = isObject(socket.handshake.auth) ? socket.handshake.auth : {};
     socket.data = { kind: "anonymous" };
+    this.limitRate(socket);
 
     if (auth.adminToken !== undefined && this.opts.tokens.verifyAdmin(auth.adminToken, this.opts.adminPin)) {
       this.becomeAdmin(socket);
@@ -239,6 +249,27 @@ export class Transport {
     });
 
     this.sendView(socket, true);
+  }
+
+  /**
+   * Token bucket per socket: every event costs a reduce and a view per client, so a flooding
+   * phone (or a modified client) would slow the game down for everybody. Excess events are
+   * dropped and acknowledged with RATE_LIMITED.
+   */
+  private limitRate(socket: GameSocket): void {
+    let tokens = RATE_BURST;
+    let last = this.opts.clock();
+    socket.use((packet, next) => {
+      const now = this.opts.clock();
+      tokens = Math.min(RATE_BURST, tokens + ((now - last) / 1000) * RATE_PER_SECOND);
+      last = now;
+      if (tokens >= 1) {
+        tokens -= 1;
+        return next();
+      }
+      const ack = packet[packet.length - 1];
+      if (typeof ack === "function") (ack as AckFn)({ ok: false, error: { code: "RATE_LIMITED", message: "Trop de requêtes : ralentis un peu" } });
+    });
   }
 
   private becomePlayer(socket: GameSocket, playerId: string): void {

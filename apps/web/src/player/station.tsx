@@ -225,6 +225,8 @@ function LightSwitches({ view, station, send }: { view: PlayerView; station: Ope
   );
 }
 
+const REPORT_EVERY_MS = 100;
+
 /**
  * Communications: turn the dial until the static clears, then hold it there for a second. The
  * target stays on the server: every position is reported and the server answers with the
@@ -236,14 +238,18 @@ function RadioDial({ view, station, send }: { view: PlayerView; station: OpenSta
   const latest = useRef(value);
   latest.current = value;
   const sending = useRef(false);
-  // One report in flight at a time, always the latest position.
+  // One report in flight at a time, always the latest position, at most every REPORT_EVERY_MS:
+  // each report costs the server a state update and a view per client.
   const report = useCallback(async () => {
     if (sending.current) return;
     sending.current = true;
     let sent: number | undefined;
     while (sent !== latest.current) {
       sent = latest.current;
+      const started = Date.now();
       await send("station:tune", { at: station.at, frequency: sent });
+      const wait = REPORT_EVERY_MS - (Date.now() - started);
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     }
     sending.current = false;
   }, [send, station.at]);

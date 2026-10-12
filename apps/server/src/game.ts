@@ -78,7 +78,14 @@ export class GameRuntime {
       if (result.state.gameId !== previous.gameId) this.persistence.pruneJournal([previous.gameId, result.state.gameId]);
     }
     this.scheduler.sync(result.timers);
-    for (const listener of this.listeners) listener(result, command, previous);
+    for (const listener of this.listeners) {
+      try {
+        listener(result, command, previous);
+      } catch (err) {
+        // The state is already committed: a failing fan-out must not take the game down.
+        console.error(`[game] diffusion de ${command.type} en échec`, err);
+      }
+    }
     return result;
   }
 
