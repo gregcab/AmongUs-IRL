@@ -69,7 +69,7 @@ Things outside the engine because they need secrets or wall-clock: HMAC tokens (
 
 ## Tests
 
-`apps/server/test/`: `engine.test.ts` drives the reducer with `Harness` (fake clock that fires derived timers in order; sabotage and task suites included); `integration.test.ts` boots the real app on a random port with a temp SQLite file and uses `TestClient` (also reused by `scripts/simulate.ts` and `scripts/screenshots.ts`).
+`apps/server/test/`: `engine.test.ts` drives the reducer with `Harness` (fake clock that fires derived timers in order; sabotage and task suites included); `fuzz.test.ts` plays seeded random games against the reducer and checks invariants after every command (no win condition left unnoticed, no pending death after the game, no role leak, input never mutated); a failure prints its seed and last commands. `integration.test.ts` boots the real app on a random port with a temp SQLite file and uses `TestClient` (also reused by `scripts/simulate.ts` and `scripts/screenshots.ts`).
 
 ## Out of scope
 
