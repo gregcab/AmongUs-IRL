@@ -25,6 +25,9 @@ describe("params", () => {
   it("validates bounds and types", () => {
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 60 }).ok).toBe(true);
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 1 }).ok).toBe(false);
+    // Keys inherited from Object.prototype are unknown parameters, not a crash.
+    expect(validateParams(DEFAULT_PARAMS, JSON.parse('{"__proto__": 3}')).ok).toBe(false);
+    expect(validateParams(DEFAULT_PARAMS, { toString: 3, constructor: 1 }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { killCooldownSeconds: 12.5 }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { ghostMeetingMode: "nope" }).ok).toBe(false);
     expect(validateParams(DEFAULT_PARAMS, { unknown: 1 }).ok).toBe(false);
@@ -512,6 +515,27 @@ describe("admin", () => {
     expect(upgradeState(old as never).printKey).toBe(h.state.gameId);
   });
 
+  it("ends the game when reviving an impostor reaches parity", () => {
+    const h = new Harness(FAST);
+    const { impostors, crew } = h.startGame(7);
+    h.do({ type: "admin:declareDeath", playerId: impostors[0]! });
+    for (const id of crew.slice(0, 3)) h.do({ type: "admin:declareDeath", playerId: id });
+    expect(h.state.phase).toBe("PLAYING"); // 1 impostor, 2 crewmates
+    h.do({ type: "admin:revive", playerId: impostors[0]! });
+    expect(h.state.phase).toBe("GAME_OVER");
+    expect([h.state.winner, h.state.winReason]).toEqual(["impostors", "parity"]);
+  });
+
+  it("makes pending deaths effective when the game ends", () => {
+    const h = new Harness(FAST);
+    const { crew } = h.startGame(7);
+    h.do({ type: "player:declareDeath", playerId: crew[0]! });
+    h.do({ type: "admin:endGame", winner: "crew" });
+    expect(h.status(crew[0]!)).toBe("BODY");
+    expect(h.state.players[crew[0]!]!.dyingEffectiveAt).toBeUndefined();
+    expect(h.state.timeline).toContainEqual({ at: h.now, playerId: crew[0]!, kind: "death" });
+  });
+
   it("declares deaths, revives, ends and returns to lobby", () => {
     const h = new Harness(FAST);
     const { crew } = h.startGame(7);
@@ -558,6 +582,33 @@ describe("admin", () => {
     expect(h.state.meeting?.subPhase).toBe("VOTING");
     h.do({ type: "admin:declareDeath", playerId: crew[0]! });
     expect(h.state.meeting?.subPhase).toBe("RESULT");
+  });
+
+  it("withdraws the votes against a player killed by the admin during the vote", () => {
+    const h = new Harness(FAST);
+    const { crew } = h.startGame(6);
+    h.do({ type: "admin:callMeeting" });
+    h.do({ type: "admin:advancePhase" });
+    h.do({ type: "admin:advancePhase" });
+    h.do({ type: "player:vote", playerId: crew[1]!, targetId: crew[0]! });
+    h.do({ type: "player:vote", playerId: crew[2]!, targetId: crew[0]! });
+    h.do({ type: "player:vote", playerId: crew[3]!, targetId: SKIP_VOTE });
+    h.do({ type: "admin:declareDeath", playerId: crew[0]! });
+    expect(h.state.meeting?.votes).toEqual({ [crew[3]!]: SKIP_VOTE });
+    // Those voters vote again; a ghost is never ejected.
+    h.do({ type: "player:vote", playerId: crew[1]!, targetId: SKIP_VOTE });
+    h.do({ type: "admin:advancePhase" });
+    expect(h.state.meeting?.result?.ejectedId).toBeNull();
+    expect(h.state.players[crew[0]!]!.ejected).toBe(false);
+  });
+
+  it("ignores player ids inherited from Object.prototype", () => {
+    const h = new Harness();
+    h.join(4);
+    expect(h.try({ type: "admin:rename", playerId: "__proto__", name: "Pirate" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(h.try({ type: "admin:kick", playerId: "__proto__" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(h.try({ type: "admin:kick", playerId: "toString" }).error?.code).toBe("UNKNOWN_PLAYER");
+    expect(({} as Record<string, unknown>).name).toBeUndefined();
   });
 
   it("is pure: reduce never mutates its input", () => {
@@ -927,7 +978,9 @@ describe("tasks", () => {
     const frequency = h.state.sabotage!.frequency!;
     expect(frequency).toBeGreaterThanOrEqual(15);
     expect(frequency).toBeLessThanOrEqual(85);
-    expect(playerView(h.state, crew[1]!).sabotage?.frequency).toBe(frequency);
+    // The target never leaves the server.
+    expect(JSON.stringify(playerView(h.state, crew[1]!))).not.toContain('"frequency"');
+    expect(JSON.stringify(tvView(h.state, "http://x"))).not.toContain('"frequency"');
     expect(tvView(h.state, "http://x").taskBar).toBeUndefined();
     expect(playerView(h.state, crew[1]!).taskBar).toBeUndefined();
     expect(adminView(h.state, "http://x", "http://x/e").taskProgress.total).toBeGreaterThan(0);
@@ -935,20 +988,49 @@ describe("tasks", () => {
     h.do({ type: "station:open", playerId: crew[1]!, stationId: "card" });
     expect(h.try({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" }).error?.code).toBe("SABOTAGED");
     expect(h.try({ type: "task:complete", playerId: impostors[1]!, stationId: "card", taskId: "t1" }).error?.code).toBe("SABOTAGED"); // fake tasks too
+    // A second card task at the same station: only the mini-game begun before the sabotage finishes.
+    h.state.players[crew[2]!]!.tasks!.push({ id: "t9", type: "card", step: 0, done: false });
     h.do({ type: "task:complete", playerId: crew[2]!, stationId: "card", taskId: "t1" });
+    expect(h.try({ type: "task:complete", playerId: crew[2]!, stationId: "card", taskId: "t9" }).error?.code).toBe("SABOTAGED");
+    h.do({ type: "station:open", playerId: crew[2]!, stationId: "card" }); // reopened after the sabotage
+    expect(h.try({ type: "task:complete", playerId: crew[2]!, stationId: "card", taskId: "t9" }).error?.code).toBe("SABOTAGED");
     h.do({ type: "task:complete", playerId: crew[0]!, stationId: "card", taskId: "t1" }); // ghosts go on
     expect([crew[0], crew[2]].map((id) => tasksOf(h, id!)[0]!.done)).toEqual([true, true]);
 
-    // Repair: the drawn frequency within the tolerance, by the living only.
+    // Repair: the dial kept within the tolerance for a second, by the living only.
+    const tune = (id: string, f: number) => h.do({ type: "station:tune", playerId: id, stationId: "comms", frequency: f });
     expect(h.try({ type: "station:tune", playerId: crew[1]!, stationId: "electrical", frequency }).error?.code).toBe("WRONG_STATION");
     expect(h.try({ type: "station:tune", playerId: crew[0]!, stationId: "comms", frequency }).error?.code).toBe("NOT_ALLOWED");
-    expect(h.try({ type: "station:tune", playerId: crew[1]!, stationId: "comms", frequency: frequency + 4 }).error?.code).toBe("WRONG_CODE");
+    tune(crew[1]!, frequency + 4);
+    expect(playerView(h.state, crew[1]!).sabotage?.signal).toMatchObject({ value: frequency + 4, tuned: false });
+    expect(playerView(h.state, crew[1]!).sabotage?.signal?.clarity).toBeLessThan(1);
+    expect(playerView(h.state, crew[3]!).sabotage?.signal).toBeUndefined(); // one's own dial only
     h.clearEvents();
-    h.do({ type: "station:tune", playerId: crew[1]!, stationId: "comms", frequency: frequency - 3 });
+    tune(crew[1]!, frequency - 3);
+    expect(playerView(h.state, crew[1]!).sabotage?.signal?.tuned).toBe(true);
+    expect(h.events).toEqual([]); // one message is not enough
+    h.wait(500);
+    tune(crew[1]!, frequency + 6); // moved away: the hold starts over
+    tune(crew[1]!, frequency);
+    h.wait(900);
+    expect(h.state.sabotage?.kind).toBe("comms");
+    tune(crew[1]!, frequency + 1); // still within the tolerance
+    h.wait(100);
     expect(h.state.sabotage).toBeUndefined();
     expect(h.events.map((e) => e.name)).toEqual(["sabotage:repaired"]);
     h.do({ type: "task:complete", playerId: crew[1]!, stationId: "card", taskId: "t1" });
     expect(tvView(h.state, "http://x").taskBar).toBeDefined();
+  });
+
+  it("does not repair the radio for a player who died while holding the dial", () => {
+    const { h, crew, impostors } = playing(7);
+    h.seconds(100);
+    h.do({ type: "player:sabotage", playerId: impostors[0]!, kind: "comms" });
+    h.do({ type: "station:tune", playerId: crew[1]!, stationId: "comms", frequency: h.state.sabotage!.frequency! });
+    h.do({ type: "admin:declareDeath", playerId: crew[1]! });
+    h.seconds(2);
+    expect(h.state.sabotage?.kind).toBe("comms");
+    expect(timersFromState(h.state).some((t) => t.id.startsWith("comms:"))).toBe(false);
   });
 
   it("lets cooperative tasks already begun finish during a communications sabotage", () => {

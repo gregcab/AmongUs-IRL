@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { GameClock } from "./clock";
 import type { Config } from "./config";
 import { cryptoRng, type Rng } from "./engine";
 import { GameRuntime } from "./game";
@@ -16,7 +17,8 @@ export interface AppOptions {
 }
 
 export async function createApp(config: Config, options: AppOptions = {}) {
-  const clock = options.clock ?? Date.now;
+  const gameClock = options.clock ? undefined : new GameClock();
+  const clock = options.clock ?? gameClock!.now;
   const tokens = new Tokens(config.hmacSecret);
   const persistence = new Persistence(options.dbFile ?? join(config.dataDir, "game.sqlite"));
   const runtime = new GameRuntime(persistence, options.rng ?? cryptoRng, clock, config.timeScale);
@@ -34,6 +36,15 @@ export async function createApp(config: Config, options: AppOptions = {}) {
   await http.ready();
   transport = new Transport(http.server, runtime, { publicUrl: config.publicUrl, adminPin: config.adminPin, tokens, clock });
 
+  // The system clock may be set (NTP) while the server runs: game time catches up in the lobby only.
+  const resyncTimer = gameClock
+    ? setInterval(() => {
+        const idle = runtime.state.phase === "LOBBY" && runtime.pendingTimers().length === 0;
+        const drift = gameClock.resyncIfIdle(idle);
+        if (drift !== 0) console.warn(`[clock] horloge système décalée de ${Math.round(drift / 1000)} s : temps de jeu recalé`);
+      }, 10_000)
+    : undefined;
+
   return {
     http,
     runtime,
@@ -46,6 +57,7 @@ export async function createApp(config: Config, options: AppOptions = {}) {
       return typeof address === "object" && address ? address.port : config.port;
     },
     async close(): Promise<void> {
+      clearInterval(resyncTimer);
       runtime.stop();
       transport!.close();
       await http.close();

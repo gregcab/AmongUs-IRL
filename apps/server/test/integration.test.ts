@@ -325,6 +325,18 @@ describe("server integration", () => {
     expect(html).toContain('id="format"');
   });
 
+  it("drops the events of a socket that floods the server", async () => {
+    const c = await client();
+    const acks = await Promise.all(Array.from({ length: 45 }, () => c.send("lobby:ready", {})));
+    const codes = acks.map((a) => (a.ok ? "ok" : a.error.code));
+    expect(codes.slice(0, 30).every((code) => code === "NOT_AUTHENTICATED")).toBe(true);
+    expect(codes.filter((code) => code === "RATE_LIMITED").length).toBeGreaterThanOrEqual(10);
+    // The budget refills.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const again = await c.send("lobby:ready", {});
+    expect(again.ok ? "ok" : again.error.code).toBe("NOT_AUTHENTICATED");
+  });
+
   it("serves the printable emergency page to the admin only", async () => {
     expect((await fetch(`${url}/api/print/emergency`)).status).toBe(401);
     const res = await fetch(`${url}/api/print/emergency`, { headers: { cookie: `${ADMIN_COOKIE}=${app.tokens.adminToken(PIN)}` } });

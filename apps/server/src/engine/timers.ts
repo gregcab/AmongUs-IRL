@@ -1,4 +1,4 @@
-import { SHIELD_CHARGE_MS, type GameState, type StationId } from "@among-us/shared";
+import { COMMS_HOLD_MS, SHIELD_CHARGE_MS, type GameState, type StationId } from "@among-us/shared";
 import { phaseKey } from "./state";
 import type { TimerRequest } from "./types";
 
@@ -27,6 +27,11 @@ export function timersFromState(s: GameState): TimerRequest[] {
     const deadline = s.sabotage?.endsAt;
     if (deadline !== undefined) {
       timers.push({ id: "sabotage", at: deadline, command: { type: "tick:sabotageDeadline", at: deadline } });
+    }
+    for (const [playerId, dial] of Object.entries(s.sabotage?.dials ?? {})) {
+      if (dial.tunedAt === undefined) continue;
+      const at = dial.tunedAt + COMMS_HOLD_MS;
+      timers.push({ id: `comms:${playerId}`, at, command: { type: "tick:commsTuned", playerId, at } });
     }
   }
   // Fingers on stations (reactor, shield) and the shield charge; tasks may run during meetings.

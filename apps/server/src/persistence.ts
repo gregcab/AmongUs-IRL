@@ -42,6 +42,12 @@ export class Persistence {
     this.saveTx(command, state, at);
   }
 
+  /** Drops the journal of every game but `keepGameIds`. */
+  pruneJournal(keepGameIds: string[]): void {
+    const placeholders = keepGameIds.map(() => "?").join(", ");
+    this.db.prepare(`DELETE FROM journal WHERE game_id NOT IN (${placeholders})`).run(...keepGameIds);
+  }
+
   saveSnapshot(state: GameState, at: number): void {
     this.upsertSnapshot.run(at, JSON.stringify(state));
   }

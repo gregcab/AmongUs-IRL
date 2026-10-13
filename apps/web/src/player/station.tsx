@@ -1,6 +1,5 @@
 import {
   COMMS_DIAL_MAX,
-  COMMS_TOLERANCE,
   OXYGEN_CODE_STATIONS,
   SABOTAGE_STATIONS,
   stationDef,
@@ -8,7 +7,7 @@ import {
   type StationAccess,
   type StationId,
 } from "@among-us/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { playClick } from "../lib/audio";
 import { SabotageInfo, StationName, stationById } from "../lib/stations";
 import { HoldPad } from "../lib/ui";
@@ -226,24 +225,38 @@ function LightSwitches({ view, station, send }: { view: PlayerView; station: Ope
   );
 }
 
-/** Communications: turn the dial until the static clears, then hold it there for a second. */
+const REPORT_EVERY_MS = 100;
+
+/**
+ * Communications: turn the dial until the static clears, then hold it there for a second. The
+ * target stays on the server: every position is reported and the server answers with the
+ * clarity of the signal (`sabotage.signal`), and repairs the radio once it stayed tuned.
+ */
 function RadioDial({ view, station, send }: { view: PlayerView; station: OpenStation; send: Send }) {
-  const target = view.sabotage?.frequency ?? 0;
-  // Starts at the end of the dial farthest from the target.
-  const [value, setValue] = useState(() => (target < COMMS_DIAL_MAX / 2 ? COMMS_DIAL_MAX : 0));
-  const [busy, setBusy] = useState(false);
-  const gap = Math.abs(value - target);
-  const tuned = gap <= COMMS_TOLERANCE;
-  const clarity = Math.max(0, 1 - gap / (COMMS_DIAL_MAX / 2));
-  useEffect(() => {
-    if (!tuned || busy) return;
-    const t = setTimeout(async () => {
-      setBusy(true);
-      await send("station:tune", { at: station.at, frequency: value });
-      setBusy(false);
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [tuned, busy, value, send, station.at]);
+  // The target is drawn between 15 and 85: the end of the dial is never tuned.
+  const [value, setValue] = useState(0);
+  const latest = useRef(value);
+  latest.current = value;
+  const sending = useRef(false);
+  // One report in flight at a time, always the latest position, at most every REPORT_EVERY_MS:
+  // each report costs the server a state update and a view per client.
+  const report = useCallback(async () => {
+    if (sending.current) return;
+    sending.current = true;
+    let sent: number | undefined;
+    while (sent !== latest.current) {
+      sent = latest.current;
+      const started = Date.now();
+      await send("station:tune", { at: station.at, frequency: sent });
+      const wait = REPORT_EVERY_MS - (Date.now() - started);
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+    sending.current = false;
+  }, [send, station.at]);
+  useEffect(() => void report(), [value, report]);
+  const signal = view.sabotage?.signal;
+  const clarity = signal?.clarity ?? 0;
+  const tuned = signal?.tuned === true && signal.value === value;
   // A sine wave buried in noise that fades as the dial gets closer.
   const points = Array.from({ length: 61 }, (_, i) => {
     const x = (i / 60) * 200;

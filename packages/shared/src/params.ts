@@ -100,11 +100,12 @@ export function validateParams(base: GameParams, update: unknown): ParamsValidat
   const errors: string[] = [];
 
   for (const [key, value] of Object.entries(input)) {
-    if (!(key in DEFAULT_PARAMS)) {
+    // Own keys only: `in` would accept "__proto__" or "toString".
+    if (!Object.hasOwn(DEFAULT_PARAMS, key)) {
       errors.push(`Paramètre inconnu : ${key}`);
       continue;
     }
-    if (key in PARAM_BOUNDS) {
+    if (Object.hasOwn(PARAM_BOUNDS, key)) {
       const [min, max] = PARAM_BOUNDS[key as NumericKey];
       if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
         errors.push(`${key} doit être un entier entre ${min} et ${max}`);

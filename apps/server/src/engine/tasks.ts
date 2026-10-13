@@ -143,11 +143,15 @@ export function completeTask(c: Ctx, playerId: string, stationId: StationId, tas
   if (!stations.includes(stationId)) {
     return fail("WRONG_STATION", `Cette étape se fait à la station ${stations.map((id) => stationLabel(c.s, id)).join(" ou ")}`);
   }
-  // A mini-game begun (station opened) before the radio went down may finish.
-  const opened = p.openedStation;
-  const begun = opened?.stationId === stationId && opened.at < (c.s.sabotage?.startedAt ?? 0);
-  const blocked = begun ? undefined : commsBlocked(c, p);
-  if (blocked) return blocked;
+  const blocked = commsBlocked(c, p);
+  if (blocked) {
+    // The mini-game begun (station opened) before the radio went down may finish, and only that
+    // one: reopening the station now does not count as begun.
+    const opened = p.openedStation;
+    const begun = opened?.stationId === stationId && opened.at < c.s.sabotage!.startedAt;
+    if (!begun) return blocked;
+    delete p.openedStation;
+  }
   nextStep(c, p, task);
 }
 
